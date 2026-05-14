@@ -228,6 +228,24 @@ Common status codes to know:
 
 ---
 
+### `if __name__ == "__main__":`
+The entry point guard — ensures `main()` only runs when the file is executed directly, not when it's imported by another file.
+
+**Why it works:**
+Python sets a special variable called `__name__` on every file it runs. When you run a file directly (`python3 analyze.py`), Python sets `__name__` to `"__main__"`. When a file is imported by another file, `__name__` becomes the filename instead. This one-line check is how Python tells the difference.
+
+**Good to know:**
+Without this guard, any file that imports `analyze.py` would immediately start fetching PRs — which you never want. As your project grows and files start importing each other, this guard prevents unintended side effects. You'll see it at the bottom of almost every Python script.
+
+```python
+# This only runs when you do: python3 analyze.py
+# It does NOT run if another file does: import analyze
+if __name__ == "__main__":
+    main()
+```
+
+---
+
 ### List Comprehension
 A compact way to build a new list by looping in one line.
 
@@ -354,6 +372,18 @@ git config --global user.email "you@example.com"
 git config --global user.name "Your Name"
 ```
 
+### `Command 'python' not found`
+- **Cause:** Ubuntu only ships with `python3` — the `python` alias doesn't exist by default
+- **Fix:** Always use `python3` to run scripts, or activate your venv first (which sets up the alias)
+```bash
+python3 analyze.py --repo owner/repo
+```
+
+### VS Code shows `Import "dotenv" could not be resolved`
+- **Cause:** VS Code is pointing at system Python instead of your venv
+- **Fix:** `Ctrl + Shift + P` → `Python: Select Interpreter` → select the `.venv` option
+  or enter path manually: `/home/perry/Projects/pr-risk-analyzer/.venv/bin/python`
+
 ---
 
 ## CHECKPOINTS
@@ -371,6 +401,7 @@ git config --global user.name "Your Name"
 | What do the three `import` lines do? | `requests` = HTTP library, `os` = OS tools, `from dotenv import load_dotenv` = grab one function | ✅ Mostly correct |
 | What is `HEADERS` and why send it? | CORS to accept the GitHub token request | 🟡 Wrong concept — CORS is browser-only. `HEADERS` proves identity + sets response format |
 | What is `[f["filename"] for f in files]`? | Finds the filenames in the list called files | ✅ Correct — this is called a list comprehension |
+| What does `if __name__ == "__main__":` do? | It's the entry point for the code | ✅ Correct — only runs `main()` when the file is executed directly, not when imported |
 
 ---
 

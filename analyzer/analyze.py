@@ -1,5 +1,14 @@
 import argparse
+import json
 from analyzer.github_client import get_open_prs, get_pr_files, parse_pr
+from analyzer.ai_analyzer import analyze_pr_risk
+
+# risk level emoji labels for display
+RISK_EMOJI = {
+    "LOW": "🟢 LOW",
+    "MEDIUM": "🟡 MEDIUM",
+    "HIGH": "🔴 HIGH"
+}
 
 
 def main():
@@ -20,21 +29,27 @@ def main():
         print("No open PRs found.")
         return
 
-    # loop through each PR, fetch its files, parse it, and print a summary
+    # loop through each PR, fetch its files, parse it, analyze risk, and print
     for pr in prs:
         files = get_pr_files(owner, repo, pr["number"])
         parsed = parse_pr(pr, files)
 
-        print(f"PR #{parsed['number']} — {parsed['title']}")
+        # send PR data to Claude and get back risk level + summary
+        print(f"Analyzing PR #{parsed['number']}...")
+        analysis = analyze_pr_risk(parsed)
+
+        risk = RISK_EMOJI.get(analysis.get("risk_level", "MEDIUM"))
+        summary = analysis.get("summary", "No summary available.")
+
+        print(f"\nPR #{parsed['number']} — {parsed['title']}")
         print(f"  Author       : {parsed['author']}")
         print(f"  Files changed: {parsed['files_changed']}")
         print(f"  Additions    : +{parsed['additions']}")
         print(f"  Deletions    : -{parsed['deletions']}")
-        print(f"  Files        : {', '.join(parsed['filenames'][:5])}")
+        print(f"  Risk Level   : {risk}")
+        print(f"  Summary      : {summary}")
         print()
 
 
-# only run main() when this file is executed directly
-# if another file imports this, main() won't fire automatically
 if __name__ == "__main__":
     main()

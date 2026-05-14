@@ -1,7 +1,7 @@
 # PR Risk Analyzer — Learning Notes
 > Automatically updated by Claude after every checkpoint and learning moment.
 > Every concept includes "Why it works" and "Good to know" for future reference.
-> Last updated: Week 1 complete
+> Last updated: Week 1 complete ✅ — Week 2 starting
 
 ---
 
@@ -78,6 +78,19 @@ Use the **Conventional Commits** format — it's standard on real engineering te
 - `refactor:` — code restructure with no behavior change
 
 Example: `git commit -m "feat: add GitHub API client with PR fetching"`
+
+---
+
+### When to commit
+| Situation | Commit? |
+|---|---|
+| Code is complete, testing for the first time | ✅ Yes — save a clean state first |
+| In the middle of debugging a crash | ❌ No — don't commit broken code |
+| Just fixed a bug and it works | ✅ Yes — commit the fix with a clear message |
+| Making a tiny tweak to test something | ❌ No — wait until it works |
+| About to try something risky | ✅ Yes — gives you a safe point to revert to |
+
+**Rule of thumb:** commit working code, not broken code. Every commit should be a state someone else could check out and run.
 
 ---
 
@@ -229,17 +242,17 @@ Common status codes to know:
 ---
 
 ### `if __name__ == "__main__":`
-The entry point guard — ensures `main()` only runs when the file is executed directly, not when it's imported by another file.
+The entry point guard — ensures `main()` only runs when the file is executed directly, not when imported.
 
 **Why it works:**
-Python sets a special variable called `__name__` on every file it runs. When you run a file directly (`python3 analyze.py`), Python sets `__name__` to `"__main__"`. When a file is imported by another file, `__name__` becomes the filename instead. This one-line check is how Python tells the difference.
+Python sets `__name__` to `"__main__"` when you run a file directly. When a file is imported by another file, `__name__` becomes the filename instead. This one check is how Python tells the difference.
 
 **Good to know:**
-Without this guard, any file that imports `analyze.py` would immediately start fetching PRs — which you never want. As your project grows and files start importing each other, this guard prevents unintended side effects. You'll see it at the bottom of almost every Python script.
+Without this guard, any file that imports `analyze.py` would immediately start fetching PRs. You'll see this pattern at the bottom of almost every Python script.
 
 ```python
-# This only runs when you do: python3 analyze.py
-# It does NOT run if another file does: import analyze
+# runs when you do: python3 analyze.py
+# does NOT run when another file does: import analyze
 if __name__ == "__main__":
     main()
 ```
@@ -263,7 +276,7 @@ filenames = [f["filename"] for f in files]
 Python evaluates the expression for each item and collects the results into a new list. It's not just syntax sugar — it's also faster than a for loop for list building.
 
 **Good to know:**
-Pattern: `[expression for item in iterable]`. You can also add a condition: `[f["filename"] for f in files if f["status"] != "removed"]`
+Pattern: `[expression for item in iterable]`. You can also filter: `[f["filename"] for f in files if f["status"] != "removed"]`
 
 ---
 
@@ -275,10 +288,45 @@ total = sum(f["additions"] for f in files)
 ```
 
 **Why it works:**
-Instead of building an intermediate list and then summing it, a generator yields one value at a time and feeds it directly to `sum()`. More memory efficient for large datasets.
+Instead of building an intermediate list and then summing it, a generator yields one value at a time directly to `sum()`. More memory efficient for large datasets.
 
 **Good to know:**
-Use generator expressions inside `sum()`, `max()`, `min()`, `any()`, `all()`. If you need the actual list, use a list comprehension instead.
+Use generator expressions inside `sum()`, `max()`, `min()`, `any()`, `all()`. If you need the actual list back, use a list comprehension instead.
+
+---
+
+### argparse
+A Python library for building CLI tools that accept arguments from the terminal.
+
+**Why it works:**
+`argparse` reads `sys.argv` (the list of words typed after your script name) and maps them to named variables. `--repo microsoft/vscode` becomes `args.repo = "microsoft/vscode"` inside your script.
+
+**Good to know:**
+Every real CLI tool uses argument parsing. `required=True` means the script will print a helpful error and exit if the argument is missing — no cryptic crashes.
+
+```python
+parser = argparse.ArgumentParser()
+parser.add_argument("--repo", required=True, help="Format: owner/repo-name")
+args = parser.parse_args()
+# access it as: args.repo
+```
+
+---
+
+## PR RISK ANALYSIS — KEY INSIGHT
+
+Raw line counts are a starting signal but not the whole picture.
+
+| Signal | What it suggests |
+|---|---|
+| High additions + low deletions | Lots of new code, little cleanup — higher risk |
+| Many files changed | Wide blast radius — touches more of the codebase |
+| Security/auth files touched | Higher risk regardless of line count |
+| No description | Reviewer has less context — harder to assess |
+| Config files changed | Can affect entire environments, not just one feature |
+
+**Why AI improves on raw counts:**
+Sorting by line count misses context. A 5-line change to an auth middleware can be riskier than a 500-line README update. AI can read the filenames, description, and change patterns together — the same way a senior engineer would.
 
 ---
 
@@ -293,7 +341,7 @@ The server reads headers to decide whether to accept the request and how to form
 **Good to know:**
 CORS (Cross-Origin Resource Sharing) is a browser security concept — it does NOT apply to Python scripts. Headers in Python scripts are purely for API authentication and content negotiation.
 
-Common headers you'll see in DevOps tooling:
+Common headers in DevOps tooling:
 | Header | Purpose |
 |---|---|
 | `Authorization: Bearer <token>` | Prove identity via token |
@@ -307,44 +355,44 @@ Common headers you'll see in DevOps tooling:
 A token that grants API access to GitHub on your behalf.
 
 **Why it works:**
-GitHub disabled password authentication for API calls in 2021 — tokens are scoped (you control exactly what they can do) and revocable (delete without changing your password).
+GitHub disabled password authentication for API calls in 2021 — tokens are scoped and revocable without changing your password.
 
 **Good to know:**
 - Set the minimum scope needed — `repo` read access for this project
-- Tokens expire — set a reminder to regenerate before your internship starts
+- Tokens expire — regenerate before your internship starts
 - Never hardcode tokens in source files — always use `.env`
-- If you accidentally commit a token, revoke it immediately and generate a new one
+- If you accidentally commit a token, revoke it immediately
 
 ---
 
 ## SECRETS MANAGEMENT
 
 ### `.env` file
-Stores sensitive values (tokens, passwords, API keys) as named variables outside of source code.
+Stores sensitive values outside of source code.
 
 **Why it works:**
-Your Python code reads values from the environment at runtime, not from the file directly. This means you can change secrets without touching code, and different environments (dev, staging, prod) can have different values.
+Your code reads values from the environment at runtime. Different environments (dev, staging, prod) can have different values without touching code.
 
 **Good to know:**
-`.env` is a local-only file — it never leaves your machine. On real teams, secrets in production are managed by tools like AWS Secrets Manager, HashiCorp Vault, or GitHub Actions secrets — never `.env` files.
+On real teams, production secrets live in AWS Secrets Manager, HashiCorp Vault, or GitHub Actions secrets — never `.env` files.
 
 ---
 
 ### `.gitignore`
-Tells Git which files and folders to never track, stage, or commit.
+Tells Git which files to never track, stage, or commit.
 
 **Why it works:**
-Git checks `.gitignore` before staging. Any matching file is silently skipped — even with `git add .`. This is your last line of defense against accidentally committing secrets.
+Git checks `.gitignore` before staging. Matching files are silently skipped even with `git add .`.
 
 **Good to know:**
-Best practice: write your `.gitignore` before your first commit. If you commit a secret first and add it to `.gitignore` after, the secret is already in your Git history — you'd need to rewrite history to remove it.
+Write `.gitignore` before your first commit. If you commit a secret first, it's in your Git history permanently — you'd need to rewrite history to remove it.
 
 ---
 
 ## ERRORS & FIXES
 
 ### `error: externally-managed-environment`
-- **Cause:** Newer Ubuntu protects system Python from direct `pip install`
+- **Cause:** Ubuntu protects system Python from direct `pip install`
 - **Fix:** Use a virtual environment
 ```bash
 python3 -m venv .venv
@@ -353,16 +401,16 @@ pip install -r requirements.txt
 ```
 
 ### `wsl: command not found`
-- **Cause:** Ran a Windows-only command inside the Ubuntu terminal
+- **Cause:** Ran a Windows-only command inside Ubuntu
 - **Fix:** Open PowerShell and run it there
 
 ### `bash: /path/to/folder: Is a directory`
-- **Cause:** Typed a folder path as a command — forgot `cd` in front
+- **Cause:** Typed a folder path as a command — forgot `cd`
 - **Fix:** `cd /home/perry/Projects/pr-risk-analyzer`
 
 ### `bash: .venv/bin/activate: No such file or directory`
-- **Cause:** Tried to activate the venv from the wrong directory
-- **Fix:** Navigate into the project folder first, then activate
+- **Cause:** Wrong directory
+- **Fix:** Navigate into the project folder first
 
 ### Git identity error on first commit
 - **Cause:** Git doesn't know who you are yet
@@ -373,16 +421,16 @@ git config --global user.name "Your Name"
 ```
 
 ### `Command 'python' not found`
-- **Cause:** Ubuntu only ships with `python3` — the `python` alias doesn't exist by default
-- **Fix:** Always use `python3` to run scripts, or activate your venv first (which sets up the alias)
+- **Cause:** Ubuntu only ships with `python3`
+- **Fix:** Always use `python3` to run scripts
 ```bash
 python3 analyze.py --repo owner/repo
 ```
 
 ### VS Code shows `Import "dotenv" could not be resolved`
-- **Cause:** VS Code is pointing at system Python instead of your venv
-- **Fix:** `Ctrl + Shift + P` → `Python: Select Interpreter` → select the `.venv` option
-  or enter path manually: `/home/perry/Projects/pr-risk-analyzer/.venv/bin/python`
+- **Cause:** VS Code pointing at system Python instead of venv
+- **Fix:** `Ctrl + Shift + P` → `Python: Select Interpreter` → select `.venv`
+  or enter path: `/home/perry/Projects/pr-risk-analyzer/.venv/bin/python`
 
 ---
 
@@ -392,22 +440,22 @@ python3 analyze.py --repo owner/repo
 
 | Question | Your Answer | Verdict |
 |---|---|---|
-| What does `load_dotenv()` do? | Reads the .env file and loads values into the environment so `os.getenv()` can access them | ✅ Correct |
-| What does `raise_for_status()` do? | Raises an error immediately if the API request returned a 4xx or 5xx status code | ✅ Correct |
+| What does `load_dotenv()` do? | Reads the .env file and loads values into the environment | ✅ Correct |
+| What does `raise_for_status()` do? | Raises an error immediately if the request returned 4xx or 5xx | ✅ Correct |
 | What is a generator expression? | A compact way to loop and compute a value in one line | ✅ Correct |
 | What is a virtual environment? | Isolates project packages from the system Python | ✅ Correct |
-| What does `source .venv/bin/activate` do? | Activates the virtual environment from the source of the folder | 🟡 Half right — `source` runs it in your current shell so the changes stick |
-| Why `pip` not `pip3` inside a venv? | pip is the default syntax for a virtual environment | 🟡 Close — only one Python exists inside a venv so the `3` suffix is unnecessary |
+| What does `source .venv/bin/activate` do? | Activates the venv from the source of the folder | 🟡 Half right — `source` runs it in your current shell so changes stick |
+| Why `pip` not `pip3` inside a venv? | pip is the default syntax for a venv | 🟡 Close — only one Python inside a venv so the `3` suffix is unnecessary |
 | What do the three `import` lines do? | `requests` = HTTP library, `os` = OS tools, `from dotenv import load_dotenv` = grab one function | ✅ Mostly correct |
 | What is `HEADERS` and why send it? | CORS to accept the GitHub token request | 🟡 Wrong concept — CORS is browser-only. `HEADERS` proves identity + sets response format |
-| What is `[f["filename"] for f in files]`? | Finds the filenames in the list called files | ✅ Correct — this is called a list comprehension |
-| What does `if __name__ == "__main__":` do? | It's the entry point for the code | ✅ Correct — only runs `main()` when the file is executed directly, not when imported |
+| What is `[f["filename"] for f in files]`? | Finds the filenames in the list called files | ✅ Correct — called a list comprehension |
+| What does `if __name__ == "__main__":` do? | It's the entry point for the code | ✅ Correct — only runs `main()` when executed directly, not when imported |
+| What determines PR risk? | The one with the most additions and deletions | ✅ Good instinct — line count is a signal, but file type and context matter too |
 
 ---
 
 ## QUESTIONS TO FOLLOW UP ON
-- How does `raise_for_status()` decide what counts as an error? (hint: look up HTTP status code ranges)
-- What other HTTP headers are commonly used in real APIs?
+- How does `raise_for_status()` decide what counts as an error?
 - What is the difference between a `GET` and a `POST` request?
 - Why does GitHub's API use `Bearer` tokens instead of passing the token directly?
 - What happens to your Git history if you commit a secret by accident?

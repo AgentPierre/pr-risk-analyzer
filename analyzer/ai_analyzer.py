@@ -34,7 +34,15 @@ PR Details:
     # extract the text response from Claude's reply
     raw = message.content[0].text
 
-    # parse the JSON response into a Python dict
+    # strip markdown code fences if Claude wrapped the JSON in them
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    raw = raw.strip()
+
+    # parse the cleaned JSON into a Python dict
     import json
     result = json.loads(raw)
 

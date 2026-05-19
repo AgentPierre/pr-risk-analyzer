@@ -1,165 +1,216 @@
 # PR Risk Analyzer — Learning Notes
-> Automatically updated by Claude after every checkpoint and learning moment.
-> Every concept includes "Why it works" and "Good to know" for future reference.
-> Last updated: Week 1 complete ✅ — Week 2 starting
+
+> **How to use this file:**
+> Each topic is self-contained. Use the Table of Contents to jump to any concept.
+> Every entry includes when it was learned, why it works, and good-to-know context.
+> Checkpoints track your answers and growth over time.
+
+---
+
+## Table of Contents
+
+- [The Learning Contract](#the-learning-contract)
+- [GIT](#git)
+- [LINUX & TERMINAL](#linux--terminal)
+- [PYTHON](#python)
+- [DEVOPS CONCEPTS](#devops-concepts)
+- [AI & PROMPT ENGINEERING](#ai--prompt-engineering)
+- [HTTP & APIs](#http--apis)
+- [SECRETS MANAGEMENT](#secrets-management)
+- [ERRORS & FIXES](#errors--fixes)
+- [CHECKPOINTS](#checkpoints)
+- [QUESTIONS TO FOLLOW UP ON](#questions-to-follow-up-on)
 
 ---
 
 ## The Learning Contract
-Before running any code, be able to answer:
+
+Before running any code, answer these three questions:
 1. What does this do?
 2. Why is it structured this way?
 3. What would break if I removed or changed X?
 
 ---
 
-## GIT
+---
+
+# GIT
+
+> 📅 Week 1 | Core skill — used every session
+
+---
 
 ### What is Git?
 A version control system that tracks every change you make to files over time.
 Think of it as a save system for your code — except every save has a message, a timestamp, and can be rewound.
 
 **Why it works:**
-Git stores your project history as a chain of snapshots called commits. Each commit points to the previous one, forming a timeline. This means you can always go back to any point in that timeline, see what changed, and why.
+Git stores your project history as a chain of snapshots called commits. Each commit points to the previous one, forming a timeline you can always rewind.
 
 **Good to know:**
-Git is the industry standard. Every team you'll ever work on uses it. Your commit history is a professional artifact — future employers and teammates read it.
+Git is the industry standard. Your commit history is a professional artifact — future employers and teammates read it.
 
 ---
 
 ### `git init`
+> 📅 Week 1
+
 Initializes a new Git repository in the current folder.
 
 **Why it works:**
-Creates a hidden `.git` folder that stores your entire project history. Without it, Git has no idea your folder exists and none of the other Git commands will work.
+Creates a hidden `.git` folder that stores your entire project history. Without it, no other Git commands will work.
 
 **Good to know:**
-You only ever run this once per project, at the very beginning. If you run it inside an existing repo by accident, it can cause issues — always check you're in the right folder first with `pwd`.
+Only run once per project. Always check you're in the right folder first with `pwd`.
 
 ---
 
 ### `git status`
-Shows the current state of your working directory — what's changed, what's staged, what's untracked.
+> 📅 Week 1
+
+Shows the current state of your working directory.
 
 **Why it works:**
 Git tracks three zones:
-- **Untracked** — new files Git hasn't seen before (shown in red)
-- **Staged** — files you've told Git to include in the next commit (shown in green)
-- **Modified** — files Git knows about that have changed since the last commit
+- **Untracked** — new files Git hasn't seen (shown in red)
+- **Staged** — files ready to commit (shown in green)
+- **Modified** — tracked files that changed since last commit
 
 **Good to know:**
-Run `git status` constantly — before staging, before committing, after pulling. It's your sanity check. Real engineers run it more than almost any other command.
+Run `git status` constantly — before staging, before committing, after pulling. It's your sanity check.
 
 ---
 
 ### `git add .`
-Stages all changed and new files in the current folder for the next commit.
+> 📅 Week 1
+
+Stages all changed and new files for the next commit.
 
 **Why it works:**
-The `.` means "everything from here". Git reads your `.gitignore` first and silently skips any files listed there — so `.env` and `.venv/` are never staged even when you run `git add .`.
+`.` means "everything from here". Git reads `.gitignore` first and silently skips listed files — so `.env` and `.venv/` are never staged accidentally.
 
 **Good to know:**
-You can also stage individual files with `git add filename` if you only want to commit specific changes. This gives you fine-grained control over what goes into each commit — useful when you've made multiple unrelated changes.
+Use `git add filename` to stage individual files when you want fine-grained control over what goes into a commit.
 
 ---
 
 ### `git commit -m "message"`
-Saves a snapshot of everything that's staged, with a descriptive message.
+> 📅 Week 1
+
+Saves a permanent snapshot of everything staged, with a descriptive message.
 
 **Why it works:**
-A commit is permanent (unless you explicitly undo it). It records who made the change, when, and why. The `-m` flag lets you write the message inline — without it, Git opens a text editor for you to write the message.
+Records who made the change, when, and why. The `-m` flag writes the message inline.
 
 **Good to know:**
-Use the **Conventional Commits** format — it's standard on real engineering teams:
-- `feat:` — a new feature
-- `fix:` — a bug fix
-- `docs:` — documentation only
-- `chore:` — maintenance (updating dependencies, config changes)
-- `refactor:` — code restructure with no behavior change
+Use **Conventional Commits** format — standard on real engineering teams:
 
-Example: `git commit -m "feat: add GitHub API client with PR fetching"`
+| Prefix | Use for |
+|---|---|
+| `feat:` | New feature |
+| `fix:` | Bug fix |
+| `docs:` | Documentation only |
+| `chore:` | Maintenance, config changes |
+| `refactor:` | Code restructure, no behavior change |
 
 ---
 
-### When to commit
+### `git push`
+> 📅 Week 2
+
+Uploads your local commits to GitHub.
+
+**Why it works:**
+Git separates local and remote work deliberately. You commit locally freely, then push when ready to share or back up.
+
+**Good to know:**
+`Your branch is ahead of 'origin/master' by N commits` means unpushed local commits exist. Always push before ending a session.
+
+---
+
+### When to Commit
+> 📅 Week 1
+
 | Situation | Commit? |
 |---|---|
-| Code is complete, testing for the first time | ✅ Yes — save a clean state first |
-| In the middle of debugging a crash | ❌ No — don't commit broken code |
-| Just fixed a bug and it works | ✅ Yes — commit the fix with a clear message |
-| Making a tiny tweak to test something | ❌ No — wait until it works |
-| About to try something risky | ✅ Yes — gives you a safe point to revert to |
+| Code complete, testing for first time | ✅ Yes — save clean state first |
+| Mid-debug on a crash | ❌ No — don't commit broken code |
+| Just fixed a bug and it works | ✅ Yes — commit the fix |
+| Making a tiny tweak to test | ❌ No — wait until it works |
+| About to try something risky | ✅ Yes — gives a safe revert point |
 
-**Rule of thumb:** commit working code, not broken code. Every commit should be a state someone else could check out and run.
-
----
-
-### Commit before you test — always
-Stage and commit your working code before running or testing it.
-
-**Why it works:**
-If your test run reveals a bug and you make changes trying to fix it, you can always run `git diff` to see exactly what changed, or `git checkout .` to throw away your changes and go back to the last clean state.
-
-**Good to know:**
-This is the habit that separates developers who debug confidently from ones who get lost. Think of each commit as a checkpoint in a game — you can always reload from here.
+**Rule of thumb:** commit working code, not broken code.
 
 ---
 
-## LINUX & TERMINAL
+---
+
+# LINUX & TERMINAL
+
+> 📅 Week 1 | Used every session
+
+---
 
 ### The Terminal Mental Model
-The terminal always has a "current location" — the folder you're working in right now. Every command runs relative to that location.
+> 📅 Week 1
+
+The terminal always has a "current location". Every command runs relative to that location.
 
 **Why it works:**
-Unlike a GUI where you click into folders, the terminal requires you to navigate with commands. Your location affects everything — `git init` in the wrong folder, `pip install` outside a venv, or `touch` in the wrong directory all cause silent problems.
+Unlike a GUI, the terminal requires explicit navigation. Your location affects everything — `git init` in the wrong folder, `pip install` outside a venv, or `touch` in the wrong directory all cause silent problems.
 
 **Good to know:**
-Always run `pwd` (print working directory) when something isn't behaving as expected. 90% of the time you're in the wrong folder.
+Run `pwd` whenever something isn't behaving as expected. 90% of the time you're in the wrong folder.
 
 ---
 
 ### Key Navigation Commands
+> 📅 Week 1
 
 | Command | What it does | Why it works |
 |---|---|---|
-| `cd ~` | Go to home directory | `~` is a shell shortcut that always expands to your home path |
-| `cd foldername` | Move into a folder | Changes your current working directory |
-| `cd ..` | Go up one level | `..` always means "parent directory" in Linux |
-| `pwd` | Print current directory | Stands for Print Working Directory — your GPS in the terminal |
-| `mkdir foldername` | Create a new folder | Makes an empty directory at the specified path |
-| `touch filename` | Create an empty file | Originally used to update file timestamps — now mainly used to create files |
-| `ls` | List files in current folder | Short for "list" — shows what's in your current directory |
-| `ls -la` | List all files including hidden | `-l` = long format, `-a` = all files (including dotfiles like `.env`) |
-| `find . -not -path './.git/*'` | List all project files | Recursively lists everything, excluding Git internals |
+| `cd ~` | Go to home directory | `~` always expands to your home path |
+| `cd foldername` | Move into a folder | Changes current working directory |
+| `cd ..` | Go up one level | `..` always means parent directory |
+| `pwd` | Print current directory | Your GPS in the terminal |
+| `mkdir foldername` | Create a new folder | Makes an empty directory |
+| `touch filename` | Create an empty file | Originally for timestamps — now used to create files |
+| `ls` | List files | Short for "list" |
+| `ls -la` | List all files including hidden | `-l` = long format, `-a` = all files |
+| `find . -not -path './.git/*'` | List all project files | Recursively lists everything |
 
 ---
 
 ### Hidden Files (dotfiles)
+> 📅 Week 1
+
 Files starting with `.` are hidden by default in Linux (e.g. `.env`, `.gitignore`, `.venv`).
 
 **Why it works:**
-Linux convention: a leading dot means "configuration or system file — don't show by default." This keeps directories clean and prevents accidental deletion.
+Linux convention: a leading dot means "configuration file — don't show by default."
 
 **Good to know:**
-Run `ls -la` to see hidden files. This matters a lot in DevOps — most config files are dotfiles (`.bashrc`, `.ssh/`, `.kube/config`).
+Run `ls -la` to see hidden files. In DevOps, most config files are dotfiles — `.bashrc`, `.ssh/`, `.kube/config`.
 
 ---
 
-### `source`
+### `source` command
+> 📅 Week 1
+
 Runs a script in your **current shell session** rather than a subprocess.
 
 **Why it works:**
-Normally when you run a script, it runs in a child process and any changes it makes (like setting environment variables) disappear when it exits. `source` runs the script directly in your current shell so changes stick.
+Scripts normally run in a child process — changes disappear when it exits. `source` runs the script in your current shell so changes (like activating a venv) stick.
 
 **Good to know:**
-You'll use `source` in two main contexts in DevOps:
-1. `source .venv/bin/activate` — activate a Python venv
-2. `source ~/.bashrc` — reload your shell config after editing it
+Two main uses in DevOps:
+1. `source .venv/bin/activate` — activate Python venv
+2. `source ~/.bashrc` — reload shell config after editing
 
 ---
 
-### nano (terminal text editor)
-A simple text editor that runs inside the terminal.
+### nano (Terminal Text Editor)
+> 📅 Week 1
 
 | Action | Keys |
 |---|---|
@@ -168,99 +219,128 @@ A simple text editor that runs inside the terminal.
 | Search | `Ctrl + W` |
 
 **Good to know:**
-nano is great for quick edits. For bigger files, use VS Code (`code filename` from the terminal). More powerful terminal editors like `vim` exist — you'll encounter them on servers — but nano is fine for now.
+Use nano for quick edits. Use `code filename` for bigger files. `vim` exists on most servers — you'll encounter it, but nano is fine for now.
 
 ---
 
-## PYTHON
+### WSL2
+> 📅 Week 1
 
-### Virtual Environments (venv)
+Runs a real Linux environment inside Windows.
 
 **Why it works:**
-Creates an isolated Python installation for your project. Packages installed inside it don't affect system Python or other projects. Newer Ubuntu versions enforce this by blocking direct `pip install` to protect system tools that depend on Python.
+WSL2 uses a real Linux kernel inside a lightweight VM. All Linux/DevOps commands work natively.
 
 **Good to know:**
-Every real Python project uses a venv. It's not optional on teams — it's how you guarantee "it works on my machine" actually means something.
+- `wsl` is a Windows-only command — only run it in PowerShell, never Ubuntu
+- Access WSL files from Windows at `\\wsl.localhost\Ubuntu\home\username\`
+- Access Windows files from WSL at `/mnt/c/Users/username/`
+
+---
+
+---
+
+# PYTHON
+
+> 📅 Week 1–2
+
+---
+
+### Virtual Environments (venv)
+> 📅 Week 1
+
+An isolated Python installation for your project.
+
+**Why it works:**
+Packages installed inside it don't affect system Python or other projects. Newer Ubuntu versions enforce isolation by blocking direct `pip install`.
+
+**Good to know:**
+Every real Python project uses a venv. It's how teams guarantee "it works on my machine" actually means something.
 
 ```bash
 python3 -m venv .venv          # create (once)
-source .venv/bin/activate      # activate (every new terminal session)
+source .venv/bin/activate      # activate (every new terminal)
 pip install -r requirements.txt  # install packages
 ```
 
 ---
 
 ### `pip` vs `pip3`
-- `pip3` clarifies "use pip for Python 3" when Python 2 and 3 are both installed
+> 📅 Week 1
+
+- `pip3` = pip for Python 3 specifically (used when Python 2 and 3 coexist)
 - Inside a venv there's only one Python — plain `pip` works
 
 **Good to know:**
-Python 2 reached end-of-life in 2020. Most modern systems only have Python 3, but the `pip3` convention stuck. Inside a venv you never need the `3` suffix.
+Python 2 reached end-of-life in 2020. Inside a venv, never need the `3` suffix.
 
 ---
 
 ### `import` vs `from x import y`
+> 📅 Week 1
+
 - `import requests` — brings in the whole library
-- `from dotenv import load_dotenv` — grabs one specific function from a library
+- `from dotenv import load_dotenv` — grabs one specific function
 
 **Why it works:**
-Both load code into your script, but `from x import y` is more surgical. It avoids polluting your namespace with everything in a library when you only need one function.
+`from x import y` is more surgical — avoids loading an entire library when you only need one function.
 
 **Good to know:**
-Use `from x import y` when you only need specific pieces of a library. Use `import x` when you need multiple things from it and want to call them as `x.something()`.
+Use `from x import y` for specific tools. Use `import x` when you need multiple things from a library.
 
 ---
 
 ### `load_dotenv()`
-Reads your `.env` file and loads its key-value pairs into the environment.
+> 📅 Week 1
+
+Reads `.env` file and injects its key-value pairs into the environment.
 
 **Why it works:**
-Python's `os.getenv()` reads from the process environment, not from files. `load_dotenv()` bridges the gap by reading the file and injecting its values into the environment before your code runs.
+`os.getenv()` reads from the process environment, not from files. `load_dotenv()` bridges that gap.
 
 **Good to know:**
-Call it at the top of your script before any `os.getenv()` calls. If you call it too late, your variables won't be available yet.
+Always call it before any `os.getenv()` calls — if called too late, variables won't exist yet.
 
 ---
 
 ### `raise_for_status()`
+> 📅 Week 1
+
 Raises an exception if the HTTP response has an error status code (4xx or 5xx).
 
 **Why it works:**
-`requests.get()` succeeds as long as it gets *any* response — even a 404 or 401. Without `raise_for_status()` your code silently continues with bad data. With it, failures are loud and immediate.
+`requests.get()` succeeds for any response — even failures. Without this, code silently continues with bad data.
 
 **Good to know:**
-Common status codes to know:
-| Code | Meaning | Likely cause in this project |
+Common status codes:
+
+| Code | Meaning | Likely cause |
 |---|---|---|
 | `200` | OK | Everything worked |
-| `401` | Unauthorized | Bad or missing GitHub token |
-| `403` | Forbidden | Token doesn't have repo scope |
-| `404` | Not found | Wrong owner/repo name |
-| `422` | Unprocessable | Malformed request parameters |
-| `500` | Server error | GitHub's problem, not yours |
+| `401` | Unauthorized | Bad or missing token |
+| `403` | Forbidden | Token lacks required scope |
+| `404` | Not found | Wrong URL or repo name |
+| `500` | Server error | Their problem, not yours |
 
 ---
 
 ### `if __name__ == "__main__":`
-The entry point guard — ensures `main()` only runs when the file is executed directly, not when imported.
+> 📅 Week 1
+
+Entry point guard — ensures `main()` only runs when the file is executed directly.
 
 **Why it works:**
-Python sets `__name__` to `"__main__"` when you run a file directly. When a file is imported by another file, `__name__` becomes the filename instead. This one check is how Python tells the difference.
+Python sets `__name__` to `"__main__"` when run directly. When imported, `__name__` becomes the filename. This one check tells Python the difference.
 
 **Good to know:**
-Without this guard, any file that imports `analyze.py` would immediately start fetching PRs. You'll see this pattern at the bottom of almost every Python script.
-
-```python
-# runs when you do: python3 analyze.py
-# does NOT run when another file does: import analyze
-if __name__ == "__main__":
-    main()
-```
+Without this guard, importing `analyze.py` would immediately start fetching PRs. You'll see this at the bottom of almost every Python script.
 
 ---
 
 ### List Comprehension
-A compact way to build a new list by looping in one line.
+> 📅 Week 1
+
+Compact way to build a new list by looping in one line.
 
 ```python
 # Long version:
@@ -272,106 +352,276 @@ for f in files:
 filenames = [f["filename"] for f in files]
 ```
 
-**Why it works:**
-Python evaluates the expression for each item and collects the results into a new list. It's not just syntax sugar — it's also faster than a for loop for list building.
+**Pattern:** `[expression for item in iterable]`
 
 **Good to know:**
-Pattern: `[expression for item in iterable]`. You can also filter: `[f["filename"] for f in files if f["status"] != "removed"]`
+Add a filter: `[f["filename"] for f in files if f["status"] != "removed"]`
 
 ---
 
 ### Generator Expression
-Same idea as a list comprehension but computes a single value instead of building a list.
+> 📅 Week 1
+
+Same as list comprehension but computes a single value instead of building a list.
 
 ```python
 total = sum(f["additions"] for f in files)
 ```
 
 **Why it works:**
-Instead of building an intermediate list and then summing it, a generator yields one value at a time directly to `sum()`. More memory efficient for large datasets.
+Yields one value at a time directly to `sum()` — more memory efficient than building an intermediate list.
 
 **Good to know:**
-Use generator expressions inside `sum()`, `max()`, `min()`, `any()`, `all()`. If you need the actual list back, use a list comprehension instead.
+Use inside `sum()`, `max()`, `min()`, `any()`, `all()`.
 
 ---
 
 ### argparse
-A Python library for building CLI tools that accept arguments from the terminal.
+> 📅 Week 3
+
+Python library for building CLI tools that accept terminal arguments.
 
 **Why it works:**
-`argparse` reads `sys.argv` (the list of words typed after your script name) and maps them to named variables. `--repo microsoft/vscode` becomes `args.repo = "microsoft/vscode"` inside your script.
+Reads `sys.argv` and maps typed arguments to named variables. `--repo microsoft/vscode` becomes `args.repo = "microsoft/vscode"`.
 
 **Good to know:**
-Every real CLI tool uses argument parsing. `required=True` means the script will print a helpful error and exit if the argument is missing — no cryptic crashes.
+- `required=True` — script errors helpfully if argument is missing
+- `default=5` — uses fallback value if argument is omitted
+- `type=int` — automatically converts string input to integer
 
 ```python
-parser = argparse.ArgumentParser()
-parser.add_argument("--repo", required=True, help="Format: owner/repo-name")
-args = parser.parse_args()
-# access it as: args.repo
+parser.add_argument("--limit", type=int, default=5, help="Max PRs to analyze")
+# accessed as: args.limit
 ```
 
 ---
 
-## PR RISK ANALYSIS — KEY INSIGHT
+### File Output with `with open()`
+> 📅 Week 3
 
-Raw line counts are a starting signal but not the whole picture.
+Safe way to write results to a file.
 
-| Signal | What it suggests |
-|---|---|
-| High additions + low deletions | Lots of new code, little cleanup — higher risk |
-| Many files changed | Wide blast radius — touches more of the codebase |
-| Security/auth files touched | Higher risk regardless of line count |
-| No description | Reviewer has less context — harder to assess |
-| Config files changed | Can affect entire environments, not just one feature |
+**Why it works:**
+`with` is a context manager — it guarantees the file closes cleanly even if an error occurs mid-write. Without it, a crash can leave the file handle open and corrupt the output.
 
-**Why AI improves on raw counts:**
-Sorting by line count misses context. A 5-line change to an auth middleware can be riskier than a 500-line README update. AI can read the filenames, description, and change patterns together — the same way a senior engineer would.
+**Good to know:**
+File modes:
+- `"w"` — write (overwrites existing file)
+- `"a"` — append (adds to existing file)
+- `"r"` — read only
+
+```python
+with open(args.output, "w") as f:
+    f.write(content)
+# file closes automatically here
+```
 
 ---
 
-## HTTP & APIs
+---
 
-### HTTP Headers
-Key-value pairs sent with every API request that describe who is asking and what they want.
+# DEVOPS CONCEPTS
+
+> 📅 Week 1–3 | Core internship focus
+
+---
+
+### Infrastructure as Code (IaC)
+> 📅 Introduced Week 1 — deep dive coming
+
+The practice of managing and provisioning infrastructure through code rather than manual processes.
 
 **Why it works:**
-The server reads headers to decide whether to accept the request and how to format the response. Without `Authorization`, GitHub returns 401. Without `Accept`, it may return a different JSON format.
+Code is repeatable, versionable, and auditable. A Terraform file that defines a server can be run 100 times and produce the same result — a human clicking through a console cannot guarantee that.
 
 **Good to know:**
-CORS (Cross-Origin Resource Sharing) is a browser security concept — it does NOT apply to Python scripts. Headers in Python scripts are purely for API authentication and content negotiation.
+Your manager specifically named Terraform + automated pipelines as the team standard. The goal: environments should be buildable, tear-downable, and rebuildable automatically.
 
-Common headers in DevOps tooling:
+Key benefits:
+- **Repeatability** — reduces "it works on my machine" drift
+- **Speed + safety** — faster recovery, lower blast radius when changes fail
+- **Auditability** — clear history of what changed and why
+- **Scale** — less manual toil, more time on reliability
+
+---
+
+### CI/CD (Continuous Integration / Continuous Delivery)
+> 📅 Introduced Week 1 — deep dive coming
+
+Automation pipelines that build, test, and deploy code every time a change is pushed.
+
+**Why it works:**
+Manual deployments are slow, error-prone, and inconsistent. CI/CD pipelines run the same steps every time — catching bugs before they reach production.
+
+**Good to know:**
+CI = automated testing on every commit. CD = automated deployment when tests pass. Your manager's team uses this as the backbone of their cloud operations.
+
+---
+
+### PR Risk Analysis
+> 📅 Week 1–2
+
+The practice of evaluating how risky a pull request is before merging it.
+
+**Why it works:**
+Not all changes carry equal risk. A 10-line change to auth logic is riskier than a 500-line README update. Automated risk analysis scales this judgment across hundreds of PRs.
+
+**Good to know:**
+Risk signals to watch for:
+
+| Signal | Risk implication |
+|---|---|
+| Auth/security files touched | High — regardless of line count |
+| Many files changed | Wide blast radius |
+| High additions, low deletions | Lots of new code, little cleanup |
+| No description | Less reviewer context |
+| Tests included | Lower risk — author verified changes |
+| Draft PR | Not ready to merge |
+
+---
+
+---
+
+# AI & PROMPT ENGINEERING
+
+> 📅 Week 2
+
+---
+
+### What is Prompt Engineering?
+> 📅 Week 2
+
+The practice of structuring text inputs to AI models to get reliable, useful outputs.
+
+**Why it works:**
+AI models respond to context. A well-structured prompt with a clear role, format constraint, and data produces consistently better results than a vague question.
+
+**Good to know:**
+This is a real skill your manager's team uses. Getting good at it is genuinely valuable on the job — especially when building internal tools.
+
+---
+
+### The Three-Part Prompt Structure
+> 📅 Week 2
+
+Every good AI prompt for a tool has three parts:
+
+1. **Role** — "You are a senior DevOps engineer" sets the reasoning perspective
+2. **Format constraint** — asking for JSON means you can parse the response programmatically
+3. **Data** — the actual content Claude needs to make a judgment
+
+**Good to know:**
+Always ask for the minimum output fields you need. Extra fields cost tokens, which costs money at scale.
+
+---
+
+### Why JSON Output Format Matters
+> 📅 Week 2
+
+Asking for JSON instead of plain text means you can parse the response with `json.loads()`.
+
+**Why it works:**
+Plain text like "I think this is high risk" has no reliable structure to extract from. `{"risk_level": "HIGH"}` is always parseable the same way.
+
+---
+
+### Cleaning AI Responses Before Parsing
+> 📅 Week 2
+
+Claude sometimes wraps JSON in markdown code fences. Always strip before calling `json.loads()`.
+
+**Why it works:**
+Triple backticks are markdown syntax — not valid JSON. `json.loads()` fails with `JSONDecodeError` if they're present.
+
+```python
+raw = raw.strip()
+if raw.startswith("```"):
+    raw = raw.split("```")[1]
+    if raw.startswith("json"):
+        raw = raw[4:]
+raw = raw.strip()
+```
+
+---
+
+### API Costs
+> 📅 Week 2
+
+Each Claude API call costs fractions of a cent. At scale, small costs compound.
+
+**Why it works:**
+Pay-per-use APIs charge by tokens (~1 token ≈ 4 characters). Your prompt + response = total tokens billed.
+
+**Good to know:**
+Cost optimization strategies used on real teams:
+- Choose a smaller model for simpler tasks
+- Minimize prompt length — only send what's needed
+- Cache results for unchanged PRs
+- Batch calls where possible
+
+$5 in credits ≈ 5,000–10,000 risk analysis calls at current pricing.
+
+---
+
+---
+
+# HTTP & APIs
+
+> 📅 Week 1–2
+
+---
+
+### HTTP Headers
+> 📅 Week 1
+
+Key-value pairs sent with every API request describing who is asking and what they want back.
+
+**Why it works:**
+The server reads headers to decide whether to accept the request and how to format the response.
+
+**Good to know:**
+CORS is a browser security concept — it does NOT apply to Python scripts. Common headers in DevOps tooling:
+
 | Header | Purpose |
 |---|---|
-| `Authorization: Bearer <token>` | Prove identity via token |
-| `Accept: application/json` | Request JSON response format |
-| `Content-Type: application/json` | Tell server you're sending JSON |
-| `X-Request-ID` | Trace a request through distributed systems |
+| `Authorization: Bearer <token>` | Prove identity |
+| `Accept: application/json` | Request JSON format |
+| `Content-Type: application/json` | Declare you're sending JSON |
+| `X-Request-ID` | Trace requests across distributed systems |
 
 ---
 
 ### GitHub Personal Access Token (PAT)
-A token that grants API access to GitHub on your behalf.
+> 📅 Week 1
+
+A scoped token that grants API access to GitHub on your behalf.
 
 **Why it works:**
-GitHub disabled password authentication for API calls in 2021 — tokens are scoped and revocable without changing your password.
+GitHub disabled password auth for API calls in 2021. Tokens are safer — scoped to specific permissions and revocable without changing your password.
 
 **Good to know:**
-- Set the minimum scope needed — `repo` read access for this project
-- Tokens expire — regenerate before your internship starts
-- Never hardcode tokens in source files — always use `.env`
-- If you accidentally commit a token, revoke it immediately
+- Set minimum scope needed — `repo` read for this project
+- Tokens expire — regenerate before internship starts
+- Never hardcode in source files
+- If accidentally committed — revoke immediately and generate a new one
 
 ---
 
-## SECRETS MANAGEMENT
+---
 
-### `.env` file
-Stores sensitive values outside of source code.
+# SECRETS MANAGEMENT
+
+> 📅 Week 1
+
+---
+
+### `.env` File
+> 📅 Week 1
+
+Stores sensitive values (tokens, API keys) outside of source code.
 
 **Why it works:**
-Your code reads values from the environment at runtime. Different environments (dev, staging, prod) can have different values without touching code.
+Code reads values from the environment at runtime — not from the file directly. Different environments (dev, staging, prod) can have different values without touching code.
 
 **Good to know:**
 On real teams, production secrets live in AWS Secrets Manager, HashiCorp Vault, or GitHub Actions secrets — never `.env` files.
@@ -379,40 +629,65 @@ On real teams, production secrets live in AWS Secrets Manager, HashiCorp Vault, 
 ---
 
 ### `.gitignore`
-Tells Git which files to never track, stage, or commit.
+> 📅 Week 1
+
+Tells Git which files to never track, stage, or commit — ever.
 
 **Why it works:**
-Git checks `.gitignore` before staging. Matching files are silently skipped even with `git add .`.
+Git checks `.gitignore` before staging. Matching files are silently skipped even with `git add .`. Covers the entire `.env` file — adding new secrets never requires updating `.gitignore`.
 
 **Good to know:**
-Write `.gitignore` before your first commit. If you commit a secret first, it's in your Git history permanently — you'd need to rewrite history to remove it.
+Write `.gitignore` before your first commit. A committed secret lives in Git history permanently — removing it requires rewriting history.
 
 ---
 
-## ERRORS & FIXES
+---
+
+# ERRORS & FIXES
+
+> 📅 Week 1–3 | Add every new error you encounter
+
+---
 
 ### `error: externally-managed-environment`
+> 📅 Week 1
+
 - **Cause:** Ubuntu protects system Python from direct `pip install`
 - **Fix:** Use a virtual environment
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+---
+
 ### `wsl: command not found`
-- **Cause:** Ran a Windows-only command inside Ubuntu
+> 📅 Week 1
+
+- **Cause:** Ran a Windows-only command inside Ubuntu terminal
 - **Fix:** Open PowerShell and run it there
 
+---
+
 ### `bash: /path/to/folder: Is a directory`
+> 📅 Week 1
+
 - **Cause:** Typed a folder path as a command — forgot `cd`
 - **Fix:** `cd /home/perry/Projects/pr-risk-analyzer`
 
+---
+
 ### `bash: .venv/bin/activate: No such file or directory`
-- **Cause:** Wrong directory
-- **Fix:** Navigate into the project folder first
+> 📅 Week 1
+
+- **Cause:** Tried to activate venv from wrong directory
+- **Fix:** `cd` into the project folder first
+
+---
 
 ### Git identity error on first commit
+> 📅 Week 1
+
 - **Cause:** Git doesn't know who you are yet
 - **Fix:**
 ```bash
@@ -420,50 +695,111 @@ git config --global user.email "you@example.com"
 git config --global user.name "Your Name"
 ```
 
+---
+
 ### `Command 'python' not found`
+> 📅 Week 1
+
 - **Cause:** Ubuntu only ships with `python3`
 - **Fix:** Always use `python3` to run scripts
-```bash
-python3 analyze.py --repo owner/repo
-```
 
-### VS Code shows `Import "dotenv" could not be resolved`
+---
+
+### VS Code `Import "dotenv" could not be resolved`
+> 📅 Week 1
+
 - **Cause:** VS Code pointing at system Python instead of venv
 - **Fix:** `Ctrl + Shift + P` → `Python: Select Interpreter` → select `.venv`
   or enter path: `/home/perry/Projects/pr-risk-analyzer/.venv/bin/python`
 
 ---
 
-## CHECKPOINTS
+### `json.decoder.JSONDecodeError: Expecting value`
+> 📅 Week 2
 
-### Week 1 — Environment & GitHub Client
+- **Cause:** Claude wrapped JSON response in markdown code fences
+- **Fix:** Strip code fences before `json.loads()`
+```python
+raw = raw.strip()
+if raw.startswith("```"):
+    raw = raw.split("```")[1]
+    if raw.startswith("json"):
+        raw = raw[4:]
+raw = raw.strip()
+```
+
+---
+
+### `anthropic.BadRequestError: credit balance too low`
+> 📅 Week 2
+
+- **Cause:** No credits on Anthropic account
+- **Fix:** console.anthropic.com → Plans & Billing → add credits ($5 covers this project)
+
+---
+
+---
+
+# CHECKPOINTS
+
+---
+
+## Week 1 — Environment & GitHub Client
+> 📅 Week 1
 
 | Question | Your Answer | Verdict |
 |---|---|---|
-| What does `load_dotenv()` do? | Reads the .env file and loads values into the environment | ✅ Correct |
+| What does `load_dotenv()` do? | Reads the .env file and loads values so `os.getenv()` can access them | ✅ Correct |
 | What does `raise_for_status()` do? | Raises an error immediately if the request returned 4xx or 5xx | ✅ Correct |
 | What is a generator expression? | A compact way to loop and compute a value in one line | ✅ Correct |
 | What is a virtual environment? | Isolates project packages from the system Python | ✅ Correct |
 | What does `source .venv/bin/activate` do? | Activates the venv from the source of the folder | 🟡 Half right — `source` runs it in your current shell so changes stick |
-| Why `pip` not `pip3` inside a venv? | pip is the default syntax for a venv | 🟡 Close — only one Python inside a venv so the `3` suffix is unnecessary |
+| Why `pip` not `pip3` inside a venv? | pip is the default syntax for a venv | 🟡 Close — only one Python inside a venv so the `3` is unnecessary |
 | What do the three `import` lines do? | `requests` = HTTP library, `os` = OS tools, `from dotenv import load_dotenv` = grab one function | ✅ Mostly correct |
 | What is `HEADERS` and why send it? | CORS to accept the GitHub token request | 🟡 Wrong concept — CORS is browser-only. `HEADERS` proves identity + sets response format |
 | What is `[f["filename"] for f in files]`? | Finds the filenames in the list called files | ✅ Correct — called a list comprehension |
-| What does `if __name__ == "__main__":` do? | It's the entry point for the code | ✅ Correct — only runs `main()` when executed directly, not when imported |
+| What does `if __name__ == "__main__":` do? | It's the entry point for the code | ✅ Correct — only runs when executed directly, not when imported |
 | What determines PR risk? | The one with the most additions and deletions | ✅ Good instinct — line count is a signal, but file type and context matter too |
 
 ---
 
-## QUESTIONS TO FOLLOW UP ON
-- How does `raise_for_status()` decide what counts as an error?
-- What is the difference between a `GET` and a `POST` request?
-- Why does GitHub's API use `Bearer` tokens instead of passing the token directly?
-- What happens to your Git history if you commit a secret by accident?
-- What is `git diff` and when would you use it?
+## Week 2 — AI Integration
+> 📅 Week 2
+
+| Question | Your Answer | Verdict |
+|---|---|---|
+| Why send filenames to Claude, not just line counts? | Because filenames tell Claude what kind of code changed — auth files are riskier than docs | ✅ Correct |
+| Why ask Claude for JSON instead of plain text? | So we can reliably parse the response with `json.loads()` and extract specific fields | ✅ Correct |
+| Why does per-call API cost matter? | At scale, small per-call costs add up — real teams monitor and optimize AI API spend | ✅ Correct |
 
 ---
 
-## COMING UP
-- Week 2: AI integration — pipe PR data into Claude API for risk ratings
-- Week 3: CLI polish with argparse, export to report
-- Week 4: pytest basics, clean commits, README
+## Week 3 — CLI Polish
+> 📅 Week 3 — in progress
+
+| Question | Your Answer | Verdict |
+|---|---|---|
+| What happens if you run without --limit? | Uses default value of 5, analyzes first 5 PRs | ✅ Correct |
+| Why use `with open()` instead of plain `open()`? | `with` automatically closes the file when the block ends, even if an error occurs | ✅ Correct |
+
+---
+
+---
+
+# QUESTIONS TO FOLLOW UP ON
+
+> Review these before your internship starts
+
+- [ ] What is the difference between a `GET` and a `POST` request?
+- [ ] Why does GitHub's API use `Bearer` tokens instead of passing the token directly?
+- [ ] What happens to your Git history if you commit a secret by accident?
+- [ ] What is `git diff` and when would you use it?
+- [ ] What is token length and how does it affect AI API cost?
+- [ ] How would you cache AI responses to avoid paying for the same PR twice?
+- [ ] What is Terraform and how does `terraform apply` work?
+- [ ] What is a CI/CD pipeline and what triggers it?
+- [ ] What is Docker and why do teams containerize applications?
+
+---
+
+*Last updated: Week 3 in progress*

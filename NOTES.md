@@ -13,6 +13,10 @@
 - [GIT](#git)
 - [LINUX & TERMINAL](#linux--terminal)
 - [PYTHON](#python)
+- [TESTING](#testing)
+- [CI/CD & GITHUB ACTIONS](#cicd--github-actions)
+- [TERRAFORM & IAC](#terraform--iac)
+- [AZURE](#azure)
 - [DEVOPS CONCEPTS](#devops-concepts)
 - [AI & PROMPT ENGINEERING](#ai--prompt-engineering)
 - [HTTP & APIs](#http--apis)
@@ -242,7 +246,7 @@ WSL2 uses a real Linux kernel inside a lightweight VM. All Linux/DevOps commands
 
 # PYTHON
 
-> 📅 Week 1–2
+> 📅 Week 1–3
 
 ---
 
@@ -420,6 +424,321 @@ with open(args.output, "w") as f:
 
 ---
 
+# TESTING
+
+> 📅 Weekend Sprint (pre-internship)
+
+---
+
+### What is pytest?
+> 📅 Weekend Sprint
+
+Python's standard testing framework. Finds and runs any function starting with `test_` automatically.
+
+**Why it works:**
+pytest discovers test files matching `test_*.py` or `*_test.py` and runs every function prefixed with `test_`. No boilerplate required — just write functions and assert expected outcomes.
+
+**Good to know:**
+Tests prove your code works before CI runs it. Your manager's team runs tests on every commit — showing you already understand this habit matters on day one.
+
+```bash
+pytest tests/ -v    # run all tests with verbose output
+```
+
+---
+
+### Mock Data in Tests
+> 📅 Weekend Sprint
+
+Simulated inputs that mimic real API responses — used so tests run without making actual API calls.
+
+**Why it works:**
+Real API calls in tests are slow, cost money, and can fail for reasons unrelated to your code (network issues, rate limits, API changes). Mock data gives you full control — your tests always run fast, free, and consistently.
+
+**Good to know:**
+This is called "mocking" — standard practice in every professional codebase. The rule is: unit tests should never touch the network.
+
+```python
+MOCK_PR = {
+    "number": 1,
+    "title": "Test PR",
+    "user": {"login": "testuser"},
+    "body": "Description here."
+}
+MOCK_FILES = [
+    {"filename": "auth/login.py", "additions": 50, "deletions": 10}
+]
+```
+
+---
+
+### `assert` statements
+> 📅 Weekend Sprint
+
+How pytest verifies your code does what you expect.
+
+**Why it works:**
+`assert` evaluates an expression — if it's True, the test passes silently. If it's False, pytest catches the failure and reports exactly what went wrong.
+
+**Good to know:**
+Write assertions that test one specific thing per test. A test called `test_parse_pr_counts_additions_correctly` should only assert additions — not titles, authors, and additions all in one.
+
+```python
+def test_parse_pr_counts_additions_correctly():
+    result = parse_pr(MOCK_PR, MOCK_FILES)
+    assert result["additions"] == 55  # 50 + 5 across two files
+```
+
+---
+
+### Test File Structure
+> 📅 Weekend Sprint
+
+```
+tests/
+├── __init__.py          # makes tests/ a Python package
+└── test_analyzer.py     # test file — must start with test_
+```
+
+**Why it works:**
+pytest looks for files matching `test_*.py`. The `__init__.py` lets Python treat the folder as a module so imports work correctly.
+
+**Good to know:**
+Name test functions descriptively — `test_parse_pr_handles_no_description` tells you exactly what broke without reading the code.
+
+---
+
+---
+
+# CI/CD & GITHUB ACTIONS
+
+> 📅 Weekend Sprint (pre-internship)
+
+---
+
+### What is CI/CD?
+> 📅 Week 1 concept, implemented Weekend Sprint
+
+**CI (Continuous Integration):** Automatically run tests every time code is pushed.
+**CD (Continuous Delivery):** Automatically deploy when tests pass.
+
+**Why it works:**
+Manual deployments are slow, error-prone, and inconsistent. CI/CD pipelines run the same steps every time — catching bugs before they reach production.
+
+**Good to know:**
+Your manager's team uses this as the backbone of their cloud operations. CI = "it definitely works", not "I think it works".
+
+---
+
+### GitHub Actions
+> 📅 Weekend Sprint
+
+GitHub's built-in CI/CD system. Defined in YAML files under `.github/workflows/`.
+
+**Why it works:**
+Every push to GitHub triggers the workflow automatically. GitHub spins up a fresh cloud VM, runs your steps, and reports pass/fail directly in your repo.
+
+**Good to know:**
+Free for public repos. The workflow file is version-controlled alongside your code — so your CI config has the same history as everything else.
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on:
+  push:
+    branches: [ main, master ]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt pytest
+      - run: pytest tests/ -v
+```
+
+---
+
+### Why `ubuntu-latest` in CI?
+> 📅 Weekend Sprint
+
+CI pipelines use `ubuntu-latest` instead of your local machine setup.
+
+**Why it works:**
+Production servers almost always run Linux. Using `ubuntu-latest` means tests run in an environment close to production — not your personal machine with its unique config. This is the "it works everywhere" guarantee CI provides.
+
+**Good to know:**
+GitHub Actions supports Windows and macOS runners too — but Linux is the default for backend/DevOps work because it matches what runs in the cloud.
+
+---
+
+### CI vs Azure Pipelines
+> 📅 Weekend Sprint
+
+| | GitHub Actions | Azure Pipelines |
+|---|---|---|
+| Where config lives | `.github/workflows/` | `azure-pipelines.yml` |
+| Trigger | Push to GitHub | Push to Azure DevOps Repos |
+| Free tier | Yes (public repos) | Yes (up to 5 users) |
+| Your team uses | GitHub Actions (this project) | Azure Pipelines (internship) |
+
+**Good to know:**
+The concepts are identical — YAML config, triggered on push, runs steps in order. The syntax differs slightly. Your GitHub Actions experience maps directly to Azure Pipelines on day one.
+
+---
+
+---
+
+# TERRAFORM & IAC
+
+> 📅 Weekend Sprint (pre-internship)
+
+---
+
+### What is Terraform?
+> 📅 Weekend Sprint
+
+An open-source Infrastructure as Code tool that lets you define cloud resources in configuration files and provision them automatically.
+
+**Why it works:**
+Instead of clicking through the Azure portal to create resources, you write a `.tf` file describing what you want. Terraform figures out what needs to be created, modified, or destroyed to match your description.
+
+**Good to know:**
+Your manager specifically named Terraform as the team standard. The goal: environments should be buildable, tear-downable, and rebuildable via Terraform + automated pipelines.
+
+---
+
+### Core Terraform Commands
+> 📅 Weekend Sprint
+
+| Command | What it does |
+|---|---|
+| `terraform init` | Downloads provider plugins (run once per project) |
+| `terraform plan` | Shows what would change — safe, no modifications made |
+| `terraform apply` | Actually creates/modifies/destroys resources |
+| `terraform destroy` | Tears down all resources defined in config |
+| `terraform validate` | Checks syntax without connecting to cloud |
+
+**Good to know:**
+Always run `terraform plan` before `terraform apply`. It's your preview — like a git diff before committing.
+
+---
+
+### Terraform File Structure
+> 📅 Weekend Sprint
+
+```
+main.tf              # resource definitions
+variables.tf         # input variable declarations
+terraform.tfvars     # actual variable values (don't commit secrets)
+terraform.tfvars.example  # safe template to commit
+```
+
+**Why it works:**
+Separating definitions from values means the same config works across dev, staging, and prod by swapping `.tfvars` files.
+
+**Good to know:**
+`terraform.tfvars` is like `.env` for Terraform — add it to `.gitignore` if it contains real values.
+
+---
+
+### AWS → Azure Resource Mapping (for Terraform)
+> 📅 Weekend Sprint
+
+| AWS (what you know) | Azure Terraform resource |
+|---|---|
+| AWS Account/Region scope | `azurerm_resource_group` |
+| AWS Secrets Manager | `azurerm_key_vault` |
+| ECS / Fargate | `azurerm_container_group` |
+| ECR | `azurerm_container_registry` |
+| IAM Role | `azurerm_role_assignment` |
+| VPC | `azurerm_virtual_network` |
+
+**Good to know:**
+The Terraform syntax is identical regardless of cloud provider — only the resource names and properties change. Your Terraform knowledge from this project transfers directly to AWS, GCP, or any other provider.
+
+---
+
+---
+
+# AZURE
+
+> 📅 Weekend Sprint (pre-internship) | Deep dive on the job
+
+---
+
+### Azure for Students
+> 📅 Weekend Sprint
+
+Free Azure access for university students — $100 credits, no credit card required.
+
+**How to get it:** azure.microsoft.com/en-us/free/students — sign up with your `.edu` email.
+
+---
+
+### AWS → Azure Concept Map
+> 📅 Weekend Sprint
+
+Your AWS CCP knowledge transfers directly — just learn Microsoft's names:
+
+| AWS | Azure |
+|---|---|
+| AWS Account | Subscription |
+| IAM Roles/Policies | Azure RBAC |
+| CloudFormation | ARM Templates / Terraform |
+| EC2 | Virtual Machines |
+| ECS/Fargate | Container Instances |
+| ECR | Container Registry |
+| Secrets Manager | Key Vault |
+| CodePipeline | Azure Pipelines |
+| S3 | Blob Storage |
+| VPC | Virtual Network |
+
+---
+
+### Azure DevOps
+> 📅 Weekend Sprint
+
+Microsoft's platform for version control, CI/CD pipelines, and project management — all in one place.
+
+**Why it works:**
+Azure DevOps bundles Git repos (Azure Repos), CI/CD (Azure Pipelines), work tracking (Azure Boards), and artifact storage (Azure Artifacts). Your internship team uses this as their primary platform.
+
+**Good to know:**
+Thomas's day-to-day: helping teams commit code to Azure Repos, setting up pipelines that deploy to Azure subscriptions, and managing access control. Understanding this context on day one matters.
+
+---
+
+### Azure Resource Groups
+> 📅 Weekend Sprint
+
+Logical containers that hold related Azure resources — like a folder for your cloud infrastructure.
+
+**Why it works:**
+Every Azure resource must belong to a resource group. It lets you manage, monitor, and delete related resources together. Like an AWS account scope but more granular.
+
+**Good to know:**
+Thomas mentioned subscriptions constantly in the coffee chat. A subscription contains resource groups, which contain resources. Know this hierarchy: **Tenant → Subscription → Resource Group → Resource**.
+
+---
+
+### Azure Key Vault
+> 📅 Weekend Sprint
+
+Azure's secrets management service — stores API keys, tokens, and passwords securely.
+
+**Why it works:**
+Apps read secrets from Key Vault at runtime instead of storing them in code or config files. Access is controlled by Azure RBAC — only authorized identities can read specific secrets.
+
+**Good to know:**
+This is where your team would store the GitHub PAT and Claude API key in a real deployment — not in a `.env` file.
+
+---
+
+---
+
 # DEVOPS CONCEPTS
 
 > 📅 Week 1–3 | Core internship focus
@@ -427,34 +746,19 @@ with open(args.output, "w") as f:
 ---
 
 ### Infrastructure as Code (IaC)
-> 📅 Introduced Week 1 — deep dive coming
+> 📅 Introduced Week 1, implemented Weekend Sprint
 
 The practice of managing and provisioning infrastructure through code rather than manual processes.
 
 **Why it works:**
-Code is repeatable, versionable, and auditable. A Terraform file that defines a server can be run 100 times and produce the same result — a human clicking through a console cannot guarantee that.
+Code is repeatable, versionable, and auditable. A Terraform file that defines a server can be run 100 times and produce the same result — a human clicking through a portal cannot guarantee that.
 
 **Good to know:**
-Your manager specifically named Terraform + automated pipelines as the team standard. The goal: environments should be buildable, tear-downable, and rebuildable automatically.
-
-Key benefits:
-- **Repeatability** — reduces "it works on my machine" drift
+Key benefits your manager named:
+- **Repeatability** — reduces drift and "it works on my machine" issues
 - **Speed + safety** — faster recovery, lower blast radius when changes fail
 - **Auditability** — clear history of what changed and why
 - **Scale** — less manual toil, more time on reliability
-
----
-
-### CI/CD (Continuous Integration / Continuous Delivery)
-> 📅 Introduced Week 1 — deep dive coming
-
-Automation pipelines that build, test, and deploy code every time a change is pushed.
-
-**Why it works:**
-Manual deployments are slow, error-prone, and inconsistent. CI/CD pipelines run the same steps every time — catching bugs before they reach production.
-
-**Good to know:**
-CI = automated testing on every commit. CD = automated deployment when tests pass. Your manager's team uses this as the backbone of their cloud operations.
 
 ---
 
@@ -559,8 +863,6 @@ Cost optimization strategies used on real teams:
 - Cache results for unchanged PRs
 - Batch calls where possible
 
-$5 in credits ≈ 5,000–10,000 risk analysis calls at current pricing.
-
 ---
 
 ---
@@ -580,7 +882,7 @@ Key-value pairs sent with every API request describing who is asking and what th
 The server reads headers to decide whether to accept the request and how to format the response.
 
 **Good to know:**
-CORS is a browser security concept — it does NOT apply to Python scripts. Common headers in DevOps tooling:
+CORS is a browser security concept — it does NOT apply to Python scripts.
 
 | Header | Purpose |
 |---|---|
@@ -624,7 +926,7 @@ Stores sensitive values (tokens, API keys) outside of source code.
 Code reads values from the environment at runtime — not from the file directly. Different environments (dev, staging, prod) can have different values without touching code.
 
 **Good to know:**
-On real teams, production secrets live in AWS Secrets Manager, HashiCorp Vault, or GitHub Actions secrets — never `.env` files.
+On real teams, production secrets live in AWS Secrets Manager, Azure Key Vault, or GitHub Actions secrets — never `.env` files.
 
 ---
 
@@ -645,7 +947,7 @@ Write `.gitignore` before your first commit. A committed secret lives in Git his
 
 # ERRORS & FIXES
 
-> 📅 Week 1–3 | Add every new error you encounter
+> 📅 Week 1–3 | Running log of every error encountered
 
 ---
 
@@ -710,7 +1012,6 @@ git config --global user.name "Your Name"
 
 - **Cause:** VS Code pointing at system Python instead of venv
 - **Fix:** `Ctrl + Shift + P` → `Python: Select Interpreter` → select `.venv`
-  or enter path: `/home/perry/Projects/pr-risk-analyzer/.venv/bin/python`
 
 ---
 
@@ -719,14 +1020,6 @@ git config --global user.name "Your Name"
 
 - **Cause:** Claude wrapped JSON response in markdown code fences
 - **Fix:** Strip code fences before `json.loads()`
-```python
-raw = raw.strip()
-if raw.startswith("```"):
-    raw = raw.split("```")[1]
-    if raw.startswith("json"):
-        raw = raw[4:]
-raw = raw.strip()
-```
 
 ---
 
@@ -734,7 +1027,15 @@ raw = raw.strip()
 > 📅 Week 2
 
 - **Cause:** No credits on Anthropic account
-- **Fix:** console.anthropic.com → Plans & Billing → add credits ($5 covers this project)
+- **Fix:** console.anthropic.com → Plans & Billing → add credits
+
+---
+
+### `usage: analyze.py [-h] --repo REPO`
+> 📅 Week 3
+
+- **Cause:** Running old version of analyze.py that didn't have --limit flag yet
+- **Fix:** Make sure analyze.py has the updated argparse section with `--limit` and `--output` arguments
 
 ---
 
@@ -745,7 +1046,7 @@ raw = raw.strip()
 ---
 
 ## Week 1 — Environment & GitHub Client
-> 📅 Week 1
+> 📅 Week 1 ✅ Complete
 
 | Question | Your Answer | Verdict |
 |---|---|---|
@@ -764,7 +1065,7 @@ raw = raw.strip()
 ---
 
 ## Week 2 — AI Integration
-> 📅 Week 2
+> 📅 Week 2 ✅ Complete
 
 | Question | Your Answer | Verdict |
 |---|---|---|
@@ -775,7 +1076,7 @@ raw = raw.strip()
 ---
 
 ## Week 3 — CLI Polish
-> 📅 Week 3 — in progress
+> 📅 Week 3 ✅ Complete
 
 | Question | Your Answer | Verdict |
 |---|---|---|
@@ -784,11 +1085,22 @@ raw = raw.strip()
 
 ---
 
+## Weekend Sprint — Tests, CI, Terraform, Azure
+> 📅 Weekend Sprint 🔄 In progress
+
+| Question | Your Answer | Verdict |
+|---|---|---|
+| What is mock data and why use it in tests? | Simulates GitHub API responses so tests run without real API calls | ✅ Correct |
+| Why does CI use `ubuntu-latest` instead of your local setup? | To guarantee a clean consistent environment that matches production servers | ✅ Correct |
+| What Azure service maps to AWS CodePipeline? | Azure Pipelines | ✅ Correct |
+
+---
+
 ---
 
 # QUESTIONS TO FOLLOW UP ON
 
-> Review these before your internship starts
+> Review these before or during your internship
 
 - [ ] What is the difference between a `GET` and a `POST` request?
 - [ ] Why does GitHub's API use `Bearer` tokens instead of passing the token directly?
@@ -796,10 +1108,11 @@ raw = raw.strip()
 - [ ] What is `git diff` and when would you use it?
 - [ ] What is token length and how does it affect AI API cost?
 - [ ] How would you cache AI responses to avoid paying for the same PR twice?
-- [ ] What is Terraform and how does `terraform apply` work?
-- [ ] What is a CI/CD pipeline and what triggers it?
+- [ ] What is `terraform apply` doing under the hood?
+- [ ] What is the difference between Azure Pipelines and GitHub Actions YAML syntax?
 - [ ] What is Docker and why do teams containerize applications?
+- [ ] What is Azure RBAC and how does least privilege work in Azure?
 
 ---
 
-*Last updated: Week 3 in progress*
+*Last updated: Week 3 ✅ | Weekend Sprint in progress*

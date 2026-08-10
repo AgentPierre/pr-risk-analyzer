@@ -1,13 +1,14 @@
 import requests
 import os
-from dotenv import load_dotenv
 
 BASE_URL = "https://api.github.com"
 
 
 def _load_github_token() -> str | None:
-    # Prefer the current .env value over any stale shell export.
-    load_dotenv(override=True)
+    """Return the GitHub token from the environment (no .env loading here).
+
+    The application entrypoint should load .env once (see `analyze.py`).
+    """
     return os.getenv("GITHUB_TOKEN")
 
 

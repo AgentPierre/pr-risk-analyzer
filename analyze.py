@@ -1,6 +1,11 @@
 import argparse
 import json
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables once at program start (do not load in modules)
+load_dotenv()
+
 from analyzer.github_client import get_open_prs, get_pr_files, parse_pr
 from analyzer.ai_analyzer import analyze_pr_risk
 # risk level emoji labels for display

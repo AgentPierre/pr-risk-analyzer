@@ -1,49 +1,69 @@
-import anthropic
 import os
-from dotenv import load_dotenv
+import json
+from typing import Dict
 
-load_dotenv()
+try:
+    import anthropic
+except Exception:  # pragma: no cover - dependency missing
+    anthropic = None
 
-# create the Anthropic client using the API key from .env
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+def analyze_pr_risk(parsed_pr: dict) -> Dict[str, str]:
+    """Analyze a parsed PR using Anthropic Claude and return a typed dict.
 
-def analyze_pr_risk(parsed_pr: dict) -> dict:
-    # format the PR data into a prompt Claude can reason about
-    prompt = f"""You are a senior DevOps engineer reviewing a pull request.
-Analyze this PR and respond with ONLY a JSON object in this exact format:
-{{"risk_level": "LOW" or "MEDIUM" or "HIGH", "summary": "2-3 sentence summary of the changes and why you rated the risk this way"}}
+    The Anthropic client is created at call time so missing API keys do not
+    cause import-time failures. Expects ANTHROPIC_API_KEY to be set in the
+    environment (loaded by the application entrypoint).
+    """
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set in the environment")
+    if anthropic is None:
+        raise RuntimeError("anthropic package is not installed")
 
-PR Details:
-- Title: {parsed_pr['title']}
-- Author: {parsed_pr['author']}
-- Description: {parsed_pr['description']}
-- Files changed: {parsed_pr['files_changed']}
-- Additions: {parsed_pr['additions']}
-- Deletions: {parsed_pr['deletions']}
-- Files touched: {', '.join(parsed_pr['filenames'][:10])}
-"""
+    client = anthropic.Anthropic(api_key=api_key)
 
-    # send the prompt to Claude and get a response
+    prompt = (
+        f"You are a senior DevOps engineer reviewing a pull request.\n"
+        f"Analyze this PR and respond with ONLY a JSON object in this exact format:\n"
+        f"{{\"risk_level\": \"LOW\" or \"MEDIUM\" or \"HIGH\", \"summary\": \"2-3 sentence summary\"}}\n\n"
+        f"PR Details:\n"
+        f"- Title: {parsed_pr.get('title')}\n"
+        f"- Author: {parsed_pr.get('author')}\n"
+        f"- Description: {parsed_pr.get('description')}\n"
+        f"- Files changed: {parsed_pr.get('files_changed')}\n"
+        f"- Additions: {parsed_pr.get('additions')}\n"
+        f"- Deletions: {parsed_pr.get('deletions')}\n"
+        f"- Files touched: {', '.join(parsed_pr.get('filenames', [])[:10])}\n"
+    )
+
+    # Call the API
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=256,
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": prompt}],
     )
 
-    # extract the text response from Claude's reply
-    raw = message.content[0].text
+    # Extract text response safely
+    raw = ""
+    try:
+        raw = message.content[0].text
+    except Exception:
+        # best-effort: try str(message)
+        raw = str(message)
 
-    # strip markdown code fences if Claude wrapped the JSON in them
     raw = raw.strip()
     if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
+        parts = raw.split("```")
+        if len(parts) >= 2:
+            raw = parts[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
     raw = raw.strip()
 
-    # parse the cleaned JSON into a Python dict
-    import json
-    result = json.loads(raw)
+    try:
+        result = json.loads(raw)
+    except Exception as e:
+        raise ValueError(f"Failed to parse JSON from model response: {e}; raw={raw}")
 
     return result

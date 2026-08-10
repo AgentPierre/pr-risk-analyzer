@@ -1,0 +1,43 @@
+PR Risk Report — kubernetes/kubernetes
+Generated: 2026-08-10 02:50
+============================================================
+
+PR #141289 — Add initial Kubernetes practice file
+  Author       : pranxmpoojary
+  Files changed: 1
+  Additions    : +2
+  Deletions    : -0
+  Risk Level   : 🟢 LOW
+  Summary      : This PR adds an initial Kubernetes practice file with minimal changes (2 lines added to a documentation file). The low risk is due to the nature of the change being a simple documentation/practice file addition with no impact on production code, infrastructure, or critical systems.
+
+PR #141287 — test: add MemoryQoS effective state conformance
+  Author       : Cindia-blue
+  Files changed: 3
+  Additions    : +246
+  Deletions    : -4
+  Risk Level   : 🟢 LOW
+  Summary      : This PR adds test coverage and validation logic for MemoryQoS effective state conformance in Kubernetes, introducing a small comparator utility and comprehensive unit tests with no changes to production code. The draft status and author's note that e2e tests haven't been run on Linux are appropriate caution, but the changes are isolated to test files only with clear scope and intentional local validation before merge.
+
+PR #141285 — kubelet: add PostStopContainer unit test
+  Author       : 2000023946
+  Files changed: 1
+  Additions    : +36
+  Deletions    : -2
+  Risk Level   : 🟢 LOW
+  Summary      : This PR adds unit test coverage for the PostStopContainer function with 36 lines of test code and no changes to production code. The change is isolated to a test file, uses mocking for the topology manager, and carries no risk of introducing bugs or breaking existing functionality.
+
+PR #141282 — feat: add PodConditionAnalyzer utility for pod status analysis
+  Author       : Ankitavasudev
+  Files changed: 2
+  Additions    : +329
+  Deletions    : -0
+  Risk Level   : 🟢 LOW
+  Summary      : This PR adds a new utility module for pod condition analysis with comprehensive test coverage (8 test functions for 329 lines of code). Since it's purely additive with no modifications to existing code and isolated to a new utility file, the risk of introducing regressions is minimal.
+
+PR #141281 — kubectl: complete pod names and type/name forms for debug
+  Author       : theycallmeloki
+  Files changed: 2
+  Additions    : +49
+  Deletions    : -1
+  Risk Level   : 🟢 LOW
+  Summary      : This PR fixes a bug in kubectl debug command completion by switching from incorrect get-style completion to the proper pod-family completion function used by similar commands (exec, attach, logs). The change is minimal (49 additions, 1 deletion across 2 files) and includes test coverage demonstrating the fix, with no impact on actual command functionality—only shell completion behavior.

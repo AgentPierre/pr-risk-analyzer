@@ -26,7 +26,7 @@ PR Details:
 
     # send the prompt to Claude and get a response
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=256,
         messages=[{"role": "user", "content": prompt}]
     )

@@ -20,6 +20,8 @@ def analyze_pr_risk(parsed_pr: dict) -> Dict[str, str]:
         raise RuntimeError("ANTHROPIC_API_KEY is not set in the environment")
     if anthropic is None:
         raise RuntimeError("anthropic package is not installed")
+    # Allow selecting model via environment (default to haiku series)
+    model = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 
     client = anthropic.Anthropic(api_key=api_key)
 
@@ -37,12 +39,27 @@ def analyze_pr_risk(parsed_pr: dict) -> Dict[str, str]:
         f"- Files touched: {', '.join(parsed_pr.get('filenames', [])[:10])}\n"
     )
 
-    # Call the API
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=256,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    # Call the API with error handling to give clearer diagnostics
+    try:
+        message = client.messages.create(
+            model=model,
+            max_tokens=256,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as e:
+        # Best-effort classification of common auth/model errors so the
+        # user gets actionable guidance rather than a raw stacktrace.
+        msg = str(e).lower()
+        if "authentication" in msg or "invalid api key" in msg or "401" in msg:
+            raise RuntimeError(
+                "Anthropic authentication failed: API key is invalid or revoked. "
+                "Verify `ANTHROPIC_API_KEY` and ensure it has access to the requested model."
+            ) from e
+        if "model" in msg or "no such model" in msg or "not found" in msg:
+            raise RuntimeError(
+                f"Model error when calling Anthropic: {e}. Try setting ANTHROPIC_MODEL to a model you have access to."
+            ) from e
+        raise
 
     # Extract text response safely
     raw = ""

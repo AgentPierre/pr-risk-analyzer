@@ -17,10 +17,11 @@
 - [CI/CD & GITHUB ACTIONS](#cicd--github-actions)
 - [TERRAFORM & IAC](#terraform--iac)
 - [AZURE](#azure)
+- [DOCKER](#docker)
+- [SECURITY & SECRETS](#security--secrets)
 - [DEVOPS CONCEPTS](#devops-concepts)
 - [AI & PROMPT ENGINEERING](#ai--prompt-engineering)
 - [HTTP & APIs](#http--apis)
-- [SECRETS MANAGEMENT](#secrets-management)
 - [ERRORS & FIXES](#errors--fixes)
 - [CHECKPOINTS](#checkpoints)
 - [QUESTIONS TO FOLLOW UP ON](#questions-to-follow-up-on)
@@ -33,6 +34,32 @@ Before running any code, answer these three questions:
 1. What does this do?
 2. Why is it structured this way?
 3. What would break if I removed or changed X?
+
+---
+
+## Project Status — Sprint Complete ✅
+
+| Phase | Status | Key Outcome |
+|---|---|---|
+| Week 1 — GitHub API client | ✅ | Fetches real PRs via REST API |
+| Week 2 — Claude AI integration | ✅ | Rates PR risk LOW/MEDIUM/HIGH |
+| Week 3 — CLI polish | ✅ | --limit and --output flags |
+| Weekend Sprint — Tests & CI | ✅ | pytest suite + GitHub Actions |
+| Infrastructure — Terraform | ✅ | Resource Group, Key Vault, Container Instances deployed |
+| Docker | ✅ | Image builds and runs locally |
+| Refactor — production-ready imports | ✅ | load_dotenv() moved to entrypoint |
+| Azure deployment | ✅ | Live resources in East US |
+
+## Quantifiable Metrics
+
+| Metric | Value |
+|---|---|
+| Test coverage | 46% overall, 100% on ai_analyzer.py |
+| Tests passing | 6/6 (5 unit + 1 integration) |
+| Repos tested against | 3 |
+| PRs analyzed | 10 |
+| Azure resources deployed | 3 (Resource Group, Key Vault, Container Instances) |
+| Docker image | pr-risk-analyzer:v1 |
 
 ---
 
@@ -213,20 +240,6 @@ Two main uses in DevOps:
 
 ---
 
-### nano (Terminal Text Editor)
-> 📅 Week 1
-
-| Action | Keys |
-|---|---|
-| Save | `Ctrl + O` → Enter |
-| Exit | `Ctrl + X` |
-| Search | `Ctrl + W` |
-
-**Good to know:**
-Use nano for quick edits. Use `code filename` for bigger files. `vim` exists on most servers — you'll encounter it, but nano is fine for now.
-
----
-
 ### WSL2
 > 📅 Week 1
 
@@ -269,41 +282,37 @@ pip install -r requirements.txt  # install packages
 
 ---
 
-### `pip` vs `pip3`
-> 📅 Week 1
+### `load_dotenv()` — Where It Lives Matters
+> 📅 Refactor Sprint
 
-- `pip3` = pip for Python 3 specifically (used when Python 2 and 3 coexist)
-- Inside a venv there's only one Python — plain `pip` works
+`load_dotenv()` should only be called once, in the entrypoint (`analyze.py`) — not in modules that get imported.
+
+**Why it works:**
+If `ai_analyzer.py` and `github_client.py` both call `load_dotenv()` at import time, secrets may not be loaded yet when a container starts (no `.env` file in production). Moving it to `analyze.py` guarantees secrets are loaded before any module needs them.
 
 **Good to know:**
-Python 2 reached end-of-life in 2020. Inside a venv, never need the `3` suffix.
+In production (Azure Container Instances), there is no `.env` file. Secrets come from Azure Key Vault or environment variables passed at runtime via `--env-file` or Terraform variables.
 
 ---
 
-### `import` vs `from x import y`
-> 📅 Week 1
+### API Client Creation — Call Time vs Import Time
+> 📅 Refactor Sprint
 
-- `import requests` — brings in the whole library
-- `from dotenv import load_dotenv` — grabs one specific function
-
-**Why it works:**
-`from x import y` is more surgical — avoids loading an entire library when you only need one function.
-
-**Good to know:**
-Use `from x import y` for specific tools. Use `import x` when you need multiple things from a library.
-
----
-
-### `load_dotenv()`
-> 📅 Week 1
-
-Reads `.env` file and injects its key-value pairs into the environment.
+Create API clients inside functions, not at module import time.
 
 **Why it works:**
-`os.getenv()` reads from the process environment, not from files. `load_dotenv()` bridges that gap.
+Creating `anthropic.Anthropic()` at import time means the entire tool crashes immediately if the API key is missing. Creating it inside the function means the error happens when the function is called — at the right place, with the right context.
 
-**Good to know:**
-Always call it before any `os.getenv()` calls — if called too late, variables won't exist yet.
+```python
+# WRONG — crashes at import if key is missing
+client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+# CORRECT — fails gracefully at call time
+def analyze_pr_risk(pr_data):
+    from anthropic import Anthropic
+    client = Anthropic()
+    ...
+```
 
 ---
 
@@ -324,59 +333,8 @@ Common status codes:
 | `401` | Unauthorized | Bad or missing token |
 | `403` | Forbidden | Token lacks required scope |
 | `404` | Not found | Wrong URL or repo name |
+| `409` | Conflict | Resource already exists (seen in Terraform/Docker Hub) |
 | `500` | Server error | Their problem, not yours |
-
----
-
-### `if __name__ == "__main__":`
-> 📅 Week 1
-
-Entry point guard — ensures `main()` only runs when the file is executed directly.
-
-**Why it works:**
-Python sets `__name__` to `"__main__"` when run directly. When imported, `__name__` becomes the filename. This one check tells Python the difference.
-
-**Good to know:**
-Without this guard, importing `analyze.py` would immediately start fetching PRs. You'll see this at the bottom of almost every Python script.
-
----
-
-### List Comprehension
-> 📅 Week 1
-
-Compact way to build a new list by looping in one line.
-
-```python
-# Long version:
-filenames = []
-for f in files:
-    filenames.append(f["filename"])
-
-# List comprehension:
-filenames = [f["filename"] for f in files]
-```
-
-**Pattern:** `[expression for item in iterable]`
-
-**Good to know:**
-Add a filter: `[f["filename"] for f in files if f["status"] != "removed"]`
-
----
-
-### Generator Expression
-> 📅 Week 1
-
-Same as list comprehension but computes a single value instead of building a list.
-
-```python
-total = sum(f["additions"] for f in files)
-```
-
-**Why it works:**
-Yields one value at a time directly to `sum()` — more memory efficient than building an intermediate list.
-
-**Good to know:**
-Use inside `sum()`, `max()`, `min()`, `any()`, `all()`.
 
 ---
 
@@ -400,28 +358,6 @@ parser.add_argument("--limit", type=int, default=5, help="Max PRs to analyze")
 
 ---
 
-### File Output with `with open()`
-> 📅 Week 3
-
-Safe way to write results to a file.
-
-**Why it works:**
-`with` is a context manager — it guarantees the file closes cleanly even if an error occurs mid-write. Without it, a crash can leave the file handle open and corrupt the output.
-
-**Good to know:**
-File modes:
-- `"w"` — write (overwrites existing file)
-- `"a"` — append (adds to existing file)
-- `"r"` — read only
-
-```python
-with open(args.output, "w") as f:
-    f.write(content)
-# file closes automatically here
-```
-
----
-
 ---
 
 # TESTING
@@ -430,81 +366,78 @@ with open(args.output, "w") as f:
 
 ---
 
-### What is pytest?
-> 📅 Weekend Sprint
+### Unit Tests vs Integration Tests
+> 📅 Refactor Sprint ★
 
-Python's standard testing framework. Finds and runs any function starting with `test_` automatically.
+**Unit tests** (`test_analyzer.py`):
+- Mock all dependencies (fake PR data)
+- Fast — no API calls
+- Test one function in isolation
+- Always run on every commit
 
-**Why it works:**
-pytest discovers test files matching `test_*.py` or `*_test.py` and runs every function prefixed with `test_`. No boilerplate required — just write functions and assert expected outcomes.
+**Integration tests** (`test_ai_integration.py`):
+- Call real services (Anthropic API)
+- Slower — real API latency
+- Test the full pipeline end-to-end
+- Skipped unless `ANTHROPIC_API_KEY` is set
+- Marked with `@pytest.mark.integration`
 
-**Good to know:**
-Tests prove your code works before CI runs it. Your manager's team runs tests on every commit — showing you already understand this habit matters on day one.
+**Why the separation matters:**
+Real teams run unit tests on every commit (fast, always pass). Integration tests run nightly or before deployment — they're the canary that says "does this actually work end-to-end?"
+
+---
+
+### pytest Markers
+> 📅 Refactor Sprint
+
+Markers let you run subsets of tests selectively.
 
 ```bash
-pytest tests/ -v    # run all tests with verbose output
+pytest tests/ -m "not integration"  # unit tests only (fast)
+pytest tests/test_ai_integration.py  # integration only
 ```
+
+Register markers in `pytest.ini` to avoid warnings:
+```ini
+[pytest]
+markers =
+    integration: marks tests as integration (deselect with '-m "not integration"')
+```
+
+---
+
+### Test Coverage
+> 📅 Refactor Sprint
+
+```bash
+pip install pytest-cov
+pytest --cov=analyzer --cov-report=term-missing
+```
+
+| Column | Meaning |
+|---|---|
+| Stmts | Total executable lines |
+| Miss | Lines never executed by tests |
+| Cover | Percentage of lines tests touched |
+| Missing | Line numbers not covered |
+
+**Current coverage:** 46% overall, 100% on `ai_analyzer.py` (core risk logic)
+
+**Good to know:**
+70–85% is defensible for a solo project. 100% coverage on the critical path (risk scoring) is the real win.
 
 ---
 
 ### Mock Data in Tests
 > 📅 Weekend Sprint
 
-Simulated inputs that mimic real API responses — used so tests run without making actual API calls.
+Simulated inputs that mimic real API responses — used so tests run without actual API calls.
 
 **Why it works:**
-Real API calls in tests are slow, cost money, and can fail for reasons unrelated to your code (network issues, rate limits, API changes). Mock data gives you full control — your tests always run fast, free, and consistently.
+Real API calls in tests are slow, cost money, and can fail for external reasons. Mock data gives full control.
 
 **Good to know:**
-This is called "mocking" — standard practice in every professional codebase. The rule is: unit tests should never touch the network.
-
-```python
-MOCK_PR = {
-    "number": 1,
-    "title": "Test PR",
-    "user": {"login": "testuser"},
-    "body": "Description here."
-}
-MOCK_FILES = [
-    {"filename": "auth/login.py", "additions": 50, "deletions": 10}
-]
-```
-
----
-
-### `assert` statements
-> 📅 Weekend Sprint
-
-How pytest verifies your code does what you expect.
-
-**Why it works:**
-`assert` evaluates an expression — if it's True, the test passes silently. If it's False, pytest catches the failure and reports exactly what went wrong.
-
-**Good to know:**
-Write assertions that test one specific thing per test. A test called `test_parse_pr_counts_additions_correctly` should only assert additions — not titles, authors, and additions all in one.
-
-```python
-def test_parse_pr_counts_additions_correctly():
-    result = parse_pr(MOCK_PR, MOCK_FILES)
-    assert result["additions"] == 55  # 50 + 5 across two files
-```
-
----
-
-### Test File Structure
-> 📅 Weekend Sprint
-
-```
-tests/
-├── __init__.py          # makes tests/ a Python package
-└── test_analyzer.py     # test file — must start with test_
-```
-
-**Why it works:**
-pytest looks for files matching `test_*.py`. The `__init__.py` lets Python treat the folder as a module so imports work correctly.
-
-**Good to know:**
-Name test functions descriptively — `test_parse_pr_handles_no_description` tells you exactly what broke without reading the code.
+This is called "mocking" — standard practice in every professional codebase. The rule: unit tests should never touch the network.
 
 ---
 
@@ -525,9 +458,6 @@ Name test functions descriptively — `test_parse_pr_handles_no_description` tel
 **Why it works:**
 Manual deployments are slow, error-prone, and inconsistent. CI/CD pipelines run the same steps every time — catching bugs before they reach production.
 
-**Good to know:**
-Your manager's team uses this as the backbone of their cloud operations. CI = "it definitely works", not "I think it works".
-
 ---
 
 ### GitHub Actions
@@ -538,40 +468,6 @@ GitHub's built-in CI/CD system. Defined in YAML files under `.github/workflows/`
 **Why it works:**
 Every push to GitHub triggers the workflow automatically. GitHub spins up a fresh cloud VM, runs your steps, and reports pass/fail directly in your repo.
 
-**Good to know:**
-Free for public repos. The workflow file is version-controlled alongside your code — so your CI config has the same history as everything else.
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-on:
-  push:
-    branches: [ main, master ]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      - run: pip install -r requirements.txt pytest
-      - run: pytest tests/ -v
-```
-
----
-
-### Why `ubuntu-latest` in CI?
-> 📅 Weekend Sprint
-
-CI pipelines use `ubuntu-latest` instead of your local machine setup.
-
-**Why it works:**
-Production servers almost always run Linux. Using `ubuntu-latest` means tests run in an environment close to production — not your personal machine with its unique config. This is the "it works everywhere" guarantee CI provides.
-
-**Good to know:**
-GitHub Actions supports Windows and macOS runners too — but Linux is the default for backend/DevOps work because it matches what runs in the cloud.
-
 ---
 
 ### CI vs Azure Pipelines
@@ -581,11 +477,10 @@ GitHub Actions supports Windows and macOS runners too — but Linux is the defau
 |---|---|---|
 | Where config lives | `.github/workflows/` | `azure-pipelines.yml` |
 | Trigger | Push to GitHub | Push to Azure DevOps Repos |
-| Free tier | Yes (public repos) | Yes (up to 5 users) |
 | Your team uses | GitHub Actions (this project) | Azure Pipelines (internship) |
 
 **Good to know:**
-The concepts are identical — YAML config, triggered on push, runs steps in order. The syntax differs slightly. Your GitHub Actions experience maps directly to Azure Pipelines on day one.
+The concepts are identical — YAML config, triggered on push, runs steps in order. Your GitHub Actions experience maps directly to Azure Pipelines on day one.
 
 ---
 
@@ -593,7 +488,7 @@ The concepts are identical — YAML config, triggered on push, runs steps in ord
 
 # TERRAFORM & IAC
 
-> 📅 Weekend Sprint (pre-internship)
+> 📅 Weekend Sprint + Azure Deploy Sprint
 
 ---
 
@@ -603,7 +498,7 @@ The concepts are identical — YAML config, triggered on push, runs steps in ord
 An open-source Infrastructure as Code tool that lets you define cloud resources in configuration files and provision them automatically.
 
 **Why it works:**
-Instead of clicking through the Azure portal to create resources, you write a `.tf` file describing what you want. Terraform figures out what needs to be created, modified, or destroyed to match your description.
+Instead of clicking through the Azure portal, you write `.tf` files describing what you want. Terraform figures out what to create, modify, or destroy.
 
 **Good to know:**
 Your manager specifically named Terraform as the team standard. The goal: environments should be buildable, tear-downable, and rebuildable via Terraform + automated pipelines.
@@ -611,18 +506,17 @@ Your manager specifically named Terraform as the team standard. The goal: enviro
 ---
 
 ### Core Terraform Commands
-> 📅 Weekend Sprint
+> 📅 Azure Deploy Sprint
 
-| Command | What it does |
-|---|---|
-| `terraform init` | Downloads provider plugins (run once per project) |
-| `terraform plan` | Shows what would change — safe, no modifications made |
-| `terraform apply` | Actually creates/modifies/destroys resources |
-| `terraform destroy` | Tears down all resources defined in config |
-| `terraform validate` | Checks syntax without connecting to cloud |
+| Command | What it does | When to use |
+|---|---|---|
+| `terraform init` | Downloads provider plugins | Once per project, or after changing providers |
+| `terraform plan` | Preview changes — no modifications made | Always before apply — like `git diff` before commit |
+| `terraform apply` | Actually creates/modifies/destroys resources | After reviewing plan |
+| `terraform destroy` | Tears down all resources | When done — saves money |
+| `terraform state list` | Shows what resources Terraform is tracking | Debugging "no changes" surprises |
 
-**Good to know:**
-Always run `terraform plan` before `terraform apply`. It's your preview — like a git diff before committing.
+**★ Interview-ready answer:** `terraform plan` is safe — it just reads and compares. `terraform apply` is the one that costs money and makes changes.
 
 ---
 
@@ -630,24 +524,61 @@ Always run `terraform plan` before `terraform apply`. It's your preview — like
 > 📅 Weekend Sprint
 
 ```
-main.tf              # resource definitions
-variables.tf         # input variable declarations
-terraform.tfvars     # actual variable values (don't commit secrets)
-terraform.tfvars.example  # safe template to commit
+infrastructure/
+├── main.tf                    # resource definitions + variable declarations
+├── terraform.tfvars           # actual values (gitignored — has tenant_id)
+├── terraform.tfvars.example   # safe template to commit
+└── .terraform.lock.hcl        # locks provider versions (commit this)
 ```
 
 **Why it works:**
 Separating definitions from values means the same config works across dev, staging, and prod by swapping `.tfvars` files.
 
 **Good to know:**
-`terraform.tfvars` is like `.env` for Terraform — add it to `.gitignore` if it contains real values.
+`terraform.tfvars` is like `.env` for Terraform — always gitignore it if it contains real values like tenant IDs.
+
+---
+
+### Variable Declarations in Terraform
+> 📅 Azure Deploy Sprint
+
+Every variable used in `terraform.tfvars` must have a matching `variable` block in `main.tf`:
+
+```hcl
+variable "resource_group_name" {
+  description = "Name of the Azure Resource Group"
+  default     = "pr-risk-analyzer-rg"
+}
+
+variable "tenant_id" {
+  description = "Azure tenant ID for Key Vault access"
+  # no default — must be supplied at deploy time
+}
+```
+
+**Why it works:**
+Without a `variable` block, Terraform ignores the `.tfvars` value and warns "undeclared variable." The declaration tells Terraform the variable is intentional.
+
+---
+
+### Terraform State
+> 📅 Azure Deploy Sprint
+
+Terraform stores what it has deployed in a `terraform.tfstate` file.
+
+**Why it matters:**
+When you run `terraform plan`, it compares your `.tf` files against the state file to figure out what needs to change. If there's no state file, Terraform thinks nothing has been deployed — even if real resources exist in Azure.
+
+**Good to know:**
+- Never commit `terraform.tfstate` — it contains subscription IDs and resource paths
+- In production, teams store state remotely in Azure Blob Storage so everyone on the team shares it
 
 ---
 
 ### AWS → Azure Resource Mapping (for Terraform)
 > 📅 Weekend Sprint
 
-| AWS (what you know) | Azure Terraform resource |
+| AWS | Azure Terraform resource |
 |---|---|
 | AWS Account/Region scope | `azurerm_resource_group` |
 | AWS Secrets Manager | `azurerm_key_vault` |
@@ -656,8 +587,23 @@ Separating definitions from values means the same config works across dev, stagi
 | IAM Role | `azurerm_role_assignment` |
 | VPC | `azurerm_virtual_network` |
 
-**Good to know:**
-The Terraform syntax is identical regardless of cloud provider — only the resource names and properties change. Your Terraform knowledge from this project transfers directly to AWS, GCP, or any other provider.
+---
+
+### Container Group: CLI vs Web Service
+> 📅 Azure Deploy Sprint
+
+For CLI tools that run on demand (not web servers), set `ip_address_type = "None"`:
+
+```hcl
+resource "azurerm_container_group" "analyzer" {
+  ...
+  ip_address_type = "None"  # no public endpoint — CLI tool, not a server
+  ...
+}
+```
+
+**Why it works:**
+Azure requires at least one exposed port when `ip_address_type = "Public"`. CLI tools don't listen for HTTP requests — they run a task and exit. `"None"` is the correct pattern.
 
 ---
 
@@ -665,23 +611,12 @@ The Terraform syntax is identical regardless of cloud provider — only the reso
 
 # AZURE
 
-> 📅 Weekend Sprint (pre-internship) | Deep dive on the job
-
----
-
-### Azure for Students
-> 📅 Weekend Sprint
-
-Free Azure access for university students — $100 credits, no credit card required.
-
-**How to get it:** azure.microsoft.com/en-us/free/students — sign up with your `.edu` email.
+> 📅 Weekend Sprint + Azure Deploy Sprint
 
 ---
 
 ### AWS → Azure Concept Map
 > 📅 Weekend Sprint
-
-Your AWS CCP knowledge transfers directly — just learn Microsoft's names:
 
 | AWS | Azure |
 |---|---|
@@ -698,42 +633,189 @@ Your AWS CCP knowledge transfers directly — just learn Microsoft's names:
 
 ---
 
-### Azure DevOps
-> 📅 Weekend Sprint
+### Azure Resource Hierarchy ★
+> 📅 Azure Deploy Sprint
 
-Microsoft's platform for version control, CI/CD pipelines, and project management — all in one place.
+Know this cold for interviews:
 
-**Why it works:**
-Azure DevOps bundles Git repos (Azure Repos), CI/CD (Azure Pipelines), work tracking (Azure Boards), and artifact storage (Azure Artifacts). Your internship team uses this as their primary platform.
+```
+Tenant (your org's Microsoft account)
+  └── Subscription (billing boundary — your Azure for Students sub)
+        └── Resource Group (logical container — pr-risk-analyzer-rg)
+              ├── Key Vault (pr-analyzer-vault)
+              └── Container Instances (pr-risk-analyzer)
+```
 
-**Good to know:**
-Thomas's day-to-day: helping teams commit code to Azure Repos, setting up pipelines that deploy to Azure subscriptions, and managing access control. Understanding this context on day one matters.
-
----
-
-### Azure Resource Groups
-> 📅 Weekend Sprint
-
-Logical containers that hold related Azure resources — like a folder for your cloud infrastructure.
-
-**Why it works:**
-Every Azure resource must belong to a resource group. It lets you manage, monitor, and delete related resources together. Like an AWS account scope but more granular.
-
-**Good to know:**
-Thomas mentioned subscriptions constantly in the coffee chat. A subscription contains resource groups, which contain resources. Know this hierarchy: **Tenant → Subscription → Resource Group → Resource**.
+**Why it matters:**
+Thomas mentioned subscriptions constantly. Permissions, billing, and resource management all flow through this hierarchy.
 
 ---
 
 ### Azure Key Vault
-> 📅 Weekend Sprint
+> 📅 Azure Deploy Sprint
 
 Azure's secrets management service — stores API keys, tokens, and passwords securely.
 
 **Why it works:**
-Apps read secrets from Key Vault at runtime instead of storing them in code or config files. Access is controlled by Azure RBAC — only authorized identities can read specific secrets.
+Apps read secrets from Key Vault at runtime instead of storing them in code. Access is controlled by Azure RBAC — only authorized identities can read specific secrets.
 
 **Good to know:**
-This is where your team would store the GitHub PAT and Claude API key in a real deployment — not in a `.env` file.
+Next step for this project: migrate GitHub PAT and Claude API key from `.env` into Key Vault, and read them at runtime using `DefaultAzureCredential`.
+
+---
+
+### Azure Container Instances vs Container Registry
+> 📅 Azure Deploy Sprint
+
+| Service | What it is | AWS equivalent |
+|---|---|---|
+| Container Registry (ACR) | Stores Docker images | ECR |
+| Container Instances | Runs Docker images | ECS / Fargate |
+
+**Flow:** Build image → push to ACR → Container Instances pulls from ACR and runs it.
+
+---
+
+### Docker Hub Rate Limits in Azure
+> 📅 Azure Deploy Sprint
+
+Azure Container Instances pulling from Docker Hub can hit 409 rate limit errors.
+
+**Fix:** Use Microsoft Container Registry (MCR) instead:
+```hcl
+image = "mcr.microsoft.com/devcontainers/python:3.11"
+```
+
+**Why it works:**
+MCR has no rate limits for Azure deployments. Real teams always pull base images from MCR when deploying to Azure.
+
+---
+
+---
+
+# DOCKER
+
+> 📅 Azure Deploy Sprint
+
+---
+
+### What is Docker?
+> 📅 Azure Deploy Sprint
+
+A tool that packages your application and all its dependencies into a container — a self-contained unit that runs identically anywhere.
+
+**Why it works:**
+Without Docker, "it works on my machine" is a constant problem. With Docker, the container is the machine — it runs the same on your laptop, in CI, and in Azure.
+
+**Good to know:**
+The Docker image is like a snapshot of your entire running environment — Python version, packages, code — frozen at build time.
+
+---
+
+### Dockerfile
+> 📅 Azure Deploy Sprint
+
+The recipe Docker follows to build your image.
+
+```dockerfile
+FROM python:3.11-slim          # start from Python 3.11 base image
+WORKDIR /app                   # set working directory inside container
+COPY requirements.txt .        # copy requirements first (layer caching)
+RUN pip install --no-cache-dir -r requirements.txt  # install deps
+COPY analyzer/ ./analyzer/     # copy source code
+COPY analyze.py .              # copy entrypoint
+ENTRYPOINT ["python", "analyze.py"]  # run this when container starts
+```
+
+**Why `requirements.txt` before code:**
+Docker caches layers. If you copy code first, every code change rebuilds the pip install layer. Copying requirements first means pip only re-runs when requirements change.
+
+---
+
+### Key Docker Commands
+> 📅 Azure Deploy Sprint
+
+| Command | What it does |
+|---|---|
+| `docker build -t name:tag .` | Builds image from Dockerfile in current directory |
+| `docker run name:tag --help` | Runs container with `--help` argument |
+| `docker run --env-file .env name:tag --repo x/y` | Runs container with secrets from `.env` |
+| `docker images` | Lists all local images |
+| `az acr build --registry <name> --image name:tag .` | Builds and pushes directly to Azure Container Registry |
+
+---
+
+### Passing Secrets to Containers
+> 📅 Azure Deploy Sprint
+
+Containers don't have `.env` files. Secrets are passed at runtime:
+
+```bash
+# Local development
+docker run --env-file .env pr-risk-analyzer:v1 --repo owner/repo
+
+# In Azure (via Terraform)
+# Container Instances reads secrets from Key Vault at startup
+```
+
+**Why it works:**
+The container image contains no secrets — it's safe to store in a registry. Secrets are injected at runtime by the orchestration layer (Docker CLI locally, Terraform/Key Vault in Azure).
+
+---
+
+---
+
+# SECURITY & SECRETS
+
+> 📅 Week 1 + Refactor Sprint
+
+---
+
+### PAT Token vs GitHub App ★
+> 📅 Refactor Sprint
+
+| | PAT Token | GitHub App |
+|---|---|---|
+| Lifespan | Long-lived (weeks/months) | Short-lived (1 hour, auto-rotated) |
+| Scope | User-level access | Repo-level, minimal permissions |
+| Risk if exposed | High — broad access | Low — scoped, expires fast |
+| Used for | Local dev, quick testing | Production deployments |
+
+**Next step for this project:** Migrate from PAT to GitHub App + Key Vault for production-grade auth.
+
+---
+
+### `.env` vs Key Vault vs GitHub Actions Secrets
+> 📅 Refactor Sprint
+
+| Where | Use case | Risk |
+|---|---|---|
+| `.env` file | Local development only | Never commit |
+| GitHub Actions secrets | CI/CD pipelines | Safe — encrypted, not in logs |
+| Azure Key Vault | Production deployments | Most secure — RBAC controlled |
+
+**Good to know:**
+The progression from `.env` → GitHub Actions secrets → Key Vault mirrors how production teams handle secrets as systems mature.
+
+---
+
+### `.gitignore` Non-Negotiables
+> 📅 Week 1
+
+Always gitignore before first commit:
+```
+.env
+.venv/
+terraform.tfvars
+*.tfstate
+*.tfstate.backup
+.terraform/
+reports/*.txt
+.coverage
+*.swp
+```
+
+**Why:** A committed secret lives in Git history permanently — removing it requires rewriting history, which is painful and risky.
 
 ---
 
@@ -745,20 +827,18 @@ This is where your team would store the GitHub PAT and Claude API key in a real 
 
 ---
 
-### Infrastructure as Code (IaC)
-> 📅 Introduced Week 1, implemented Weekend Sprint
+### Infrastructure as Code (IaC) ★
+> 📅 Introduced Week 1, implemented Azure Deploy Sprint
 
 The practice of managing and provisioning infrastructure through code rather than manual processes.
 
-**Why it works:**
-Code is repeatable, versionable, and auditable. A Terraform file that defines a server can be run 100 times and produce the same result — a human clicking through a portal cannot guarantee that.
-
-**Good to know:**
-Key benefits your manager named:
+**Key benefits your manager named:**
 - **Repeatability** — reduces drift and "it works on my machine" issues
 - **Speed + safety** — faster recovery, lower blast radius when changes fail
 - **Auditability** — clear history of what changed and why
 - **Scale** — less manual toil, more time on reliability
+
+**★ Interview answer:** "Terraform lets us build, tear down, and rebuild environments automatically. If something breaks, we run `terraform apply` and get back to a known good state in minutes."
 
 ---
 
@@ -767,11 +847,7 @@ Key benefits your manager named:
 
 The practice of evaluating how risky a pull request is before merging it.
 
-**Why it works:**
-Not all changes carry equal risk. A 10-line change to auth logic is riskier than a 500-line README update. Automated risk analysis scales this judgment across hundreds of PRs.
-
-**Good to know:**
-Risk signals to watch for:
+**Risk signals:**
 
 | Signal | Risk implication |
 |---|---|
@@ -779,7 +855,7 @@ Risk signals to watch for:
 | Many files changed | Wide blast radius |
 | High additions, low deletions | Lots of new code, little cleanup |
 | No description | Less reviewer context |
-| Tests included | Lower risk — author verified changes |
+| Tests included | Lower risk |
 | Draft PR | Not ready to merge |
 
 ---
@@ -792,50 +868,37 @@ Risk signals to watch for:
 
 ---
 
-### What is Prompt Engineering?
-> 📅 Week 2
-
-The practice of structuring text inputs to AI models to get reliable, useful outputs.
-
-**Why it works:**
-AI models respond to context. A well-structured prompt with a clear role, format constraint, and data produces consistently better results than a vague question.
-
-**Good to know:**
-This is a real skill your manager's team uses. Getting good at it is genuinely valuable on the job — especially when building internal tools.
-
----
-
 ### The Three-Part Prompt Structure
 > 📅 Week 2
 
-Every good AI prompt for a tool has three parts:
-
 1. **Role** — "You are a senior DevOps engineer" sets the reasoning perspective
-2. **Format constraint** — asking for JSON means you can parse the response programmatically
+2. **Format constraint** — JSON means you can parse the response programmatically
 3. **Data** — the actual content Claude needs to make a judgment
-
-**Good to know:**
-Always ask for the minimum output fields you need. Extra fields cost tokens, which costs money at scale.
 
 ---
 
-### Why JSON Output Format Matters
+### JSON Output Format
 > 📅 Week 2
 
-Asking for JSON instead of plain text means you can parse the response with `json.loads()`.
+Always ask for JSON instead of plain text when building tools:
 
-**Why it works:**
-Plain text like "I think this is high risk" has no reliable structure to extract from. `{"risk_level": "HIGH"}` is always parseable the same way.
+```python
+# In the prompt:
+"Respond ONLY with valid JSON: {\"risk_level\": \"HIGH\", \"summary\": \"...\"}"
+
+# In the code:
+result = json.loads(raw_response)
+risk = result["risk_level"]
+```
+
+**Why:** Plain text has no reliable structure to extract from. JSON is always parseable.
 
 ---
 
 ### Cleaning AI Responses Before Parsing
 > 📅 Week 2
 
-Claude sometimes wraps JSON in markdown code fences. Always strip before calling `json.loads()`.
-
-**Why it works:**
-Triple backticks are markdown syntax — not valid JSON. `json.loads()` fails with `JSONDecodeError` if they're present.
+Claude sometimes wraps JSON in markdown code fences. Strip before `json.loads()`:
 
 ```python
 raw = raw.strip()
@@ -848,20 +911,14 @@ raw = raw.strip()
 
 ---
 
-### API Costs
-> 📅 Week 2
+### Model Names in Anthropic API
+> 📅 Refactor Sprint
 
-Each Claude API call costs fractions of a cent. At scale, small costs compound.
+Model names use **hyphens only** — no dots:
+- ✅ `claude-haiku-4-5-20251001`
+- ❌ `claude-haiku-4.5-20251001`
 
-**Why it works:**
-Pay-per-use APIs charge by tokens (~1 token ≈ 4 characters). Your prompt + response = total tokens billed.
-
-**Good to know:**
-Cost optimization strategies used on real teams:
-- Choose a smaller model for simpler tasks
-- Minimize prompt length — only send what's needed
-- Cache results for unchanged PRs
-- Batch calls where possible
+Check for deprecation warnings in test output — they tell you which model to migrate to.
 
 ---
 
@@ -876,70 +933,27 @@ Cost optimization strategies used on real teams:
 ### HTTP Headers
 > 📅 Week 1
 
-Key-value pairs sent with every API request describing who is asking and what they want back.
-
-**Why it works:**
-The server reads headers to decide whether to accept the request and how to format the response.
-
-**Good to know:**
-CORS is a browser security concept — it does NOT apply to Python scripts.
-
 | Header | Purpose |
 |---|---|
 | `Authorization: Bearer <token>` | Prove identity |
 | `Accept: application/json` | Request JSON format |
 | `Content-Type: application/json` | Declare you're sending JSON |
-| `X-Request-ID` | Trace requests across distributed systems |
-
----
-
-### GitHub Personal Access Token (PAT)
-> 📅 Week 1
-
-A scoped token that grants API access to GitHub on your behalf.
-
-**Why it works:**
-GitHub disabled password auth for API calls in 2021. Tokens are safer — scoped to specific permissions and revocable without changing your password.
 
 **Good to know:**
-- Set minimum scope needed — `repo` read for this project
-- Tokens expire — regenerate before internship starts
-- Never hardcode in source files
-- If accidentally committed — revoke immediately and generate a new one
+CORS is a browser security concept — it does NOT apply to Python scripts.
 
 ---
 
----
+### HTTP Status Codes That Matter for This Project
+> 📅 Week 1 + Azure Deploy Sprint
 
-# SECRETS MANAGEMENT
-
-> 📅 Week 1
-
----
-
-### `.env` File
-> 📅 Week 1
-
-Stores sensitive values (tokens, API keys) outside of source code.
-
-**Why it works:**
-Code reads values from the environment at runtime — not from the file directly. Different environments (dev, staging, prod) can have different values without touching code.
-
-**Good to know:**
-On real teams, production secrets live in AWS Secrets Manager, Azure Key Vault, or GitHub Actions secrets — never `.env` files.
-
----
-
-### `.gitignore`
-> 📅 Week 1
-
-Tells Git which files to never track, stage, or commit — ever.
-
-**Why it works:**
-Git checks `.gitignore` before staging. Matching files are silently skipped even with `git add .`. Covers the entire `.env` file — adding new secrets never requires updating `.gitignore`.
-
-**Good to know:**
-Write `.gitignore` before your first commit. A committed secret lives in Git history permanently — removing it requires rewriting history.
+| Code | Meaning | Where you saw it |
+|---|---|---|
+| `200` | OK | GitHub API success |
+| `401` | Unauthorized | Expired/missing GitHub PAT |
+| `403` | Forbidden | Token lacks scope |
+| `404` | Not found | Wrong repo, missing endpoint, wrong model name |
+| `409` | Conflict | Docker Hub rate limit in Azure |
 
 ---
 
@@ -947,95 +961,75 @@ Write `.gitignore` before your first commit. A committed secret lives in Git his
 
 # ERRORS & FIXES
 
-> 📅 Week 1–3 | Running log of every error encountered
+> 📅 Week 1 — Azure Deploy Sprint | Running log of every error encountered
 
 ---
 
 ### `error: externally-managed-environment`
-> 📅 Week 1
-
 - **Cause:** Ubuntu protects system Python from direct `pip install`
 - **Fix:** Use a virtual environment
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-```
-
----
-
-### `wsl: command not found`
-> 📅 Week 1
-
-- **Cause:** Ran a Windows-only command inside Ubuntu terminal
-- **Fix:** Open PowerShell and run it there
-
----
-
-### `bash: /path/to/folder: Is a directory`
-> 📅 Week 1
-
-- **Cause:** Typed a folder path as a command — forgot `cd`
-- **Fix:** `cd /home/perry/Projects/pr-risk-analyzer`
-
----
-
-### `bash: .venv/bin/activate: No such file or directory`
-> 📅 Week 1
-
-- **Cause:** Tried to activate venv from wrong directory
-- **Fix:** `cd` into the project folder first
-
----
-
-### Git identity error on first commit
-> 📅 Week 1
-
-- **Cause:** Git doesn't know who you are yet
-- **Fix:**
-```bash
-git config --global user.email "you@example.com"
-git config --global user.name "Your Name"
-```
-
----
-
-### `Command 'python' not found`
-> 📅 Week 1
-
-- **Cause:** Ubuntu only ships with `python3`
-- **Fix:** Always use `python3` to run scripts
-
----
-
-### VS Code `Import "dotenv" could not be resolved`
-> 📅 Week 1
-
-- **Cause:** VS Code pointing at system Python instead of venv
-- **Fix:** `Ctrl + Shift + P` → `Python: Select Interpreter` → select `.venv`
 
 ---
 
 ### `json.decoder.JSONDecodeError: Expecting value`
-> 📅 Week 2
-
 - **Cause:** Claude wrapped JSON response in markdown code fences
 - **Fix:** Strip code fences before `json.loads()`
 
 ---
 
-### `anthropic.BadRequestError: credit balance too low`
-> 📅 Week 2
-
-- **Cause:** No credits on Anthropic account
-- **Fix:** console.anthropic.com → Plans & Billing → add credits
+### `anthropic.NotFoundError: model: claude-sonnet-4-20250514`
+> 📅 Refactor Sprint
+- **Cause:** Deprecated model name
+- **Fix:** Update to `claude-haiku-4-5-20251001` (note hyphens, not dots)
 
 ---
 
-### `usage: analyze.py [-h] --repo REPO`
-> 📅 Week 3
+### `anthropic.NotFoundError: model: claude-haiku-4.5-20251001`
+> 📅 Refactor Sprint
+- **Cause:** Dots in model name instead of hyphens
+- **Fix:** `claude-haiku-4-5-20251001` (all hyphens)
 
-- **Cause:** Running old version of analyze.py that didn't have --limit flag yet
-- **Fix:** Make sure analyze.py has the updated argparse section with `--limit` and `--output` arguments
+---
+
+### `Terraform: Value for undeclared variable`
+> 📅 Azure Deploy Sprint
+- **Cause:** Variable exists in `terraform.tfvars` but has no `variable` block in `main.tf`
+- **Fix:** Add `variable "name" { description = "..." }` block to `main.tf` for each undeclared variable
+
+---
+
+### `Terraform: Inconsistent dependency lock file`
+> 📅 Azure Deploy Sprint
+- **Cause:** `main.tf` was rewritten, provider lock file is now out of sync
+- **Fix:** `terraform init` re-downloads providers and updates the lock file
+
+---
+
+### `MissingIpAddressPorts: ports in 'ipAddress' cannot be empty`
+> 📅 Azure Deploy Sprint
+- **Cause:** `ip_address_type = "Public"` requires at least one port
+- **Fix:** Set `ip_address_type = "None"` for CLI tools that don't serve HTTP
+
+---
+
+### `409 Conflict: RegistryErrorResponse: error from docker registry`
+> 📅 Azure Deploy Sprint
+- **Cause:** Docker Hub rate limiting Azure's pull request
+- **Fix:** Use `mcr.microsoft.com/devcontainers/python:3.11` instead of `python:3.11-slim`
+
+---
+
+### `ERROR: failed to build: Dockerfile: no such file or directory`
+> 📅 Azure Deploy Sprint
+- **Cause:** No Dockerfile in the project root
+- **Fix:** Create `Dockerfile` with FROM, WORKDIR, COPY, RUN, ENTRYPOINT instructions
+
+---
+
+### `docker: command not found` in WSL2
+> 📅 Azure Deploy Sprint
+- **Cause:** Docker not installed in WSL2 Ubuntu
+- **Fix:** `curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh`
 
 ---
 
@@ -1045,8 +1039,7 @@ git config --global user.name "Your Name"
 
 ---
 
-## Week 1 — Environment & GitHub Client
-> 📅 Week 1 ✅ Complete
+## Week 1 — Environment & GitHub Client ✅ Complete
 
 | Question | Your Answer | Verdict |
 |---|---|---|
@@ -1054,45 +1047,40 @@ git config --global user.name "Your Name"
 | What does `raise_for_status()` do? | Raises an error immediately if the request returned 4xx or 5xx | ✅ Correct |
 | What is a generator expression? | A compact way to loop and compute a value in one line | ✅ Correct |
 | What is a virtual environment? | Isolates project packages from the system Python | ✅ Correct |
-| What does `source .venv/bin/activate` do? | Activates the venv from the source of the folder | 🟡 Half right — `source` runs it in your current shell so changes stick |
-| Why `pip` not `pip3` inside a venv? | pip is the default syntax for a venv | 🟡 Close — only one Python inside a venv so the `3` is unnecessary |
-| What do the three `import` lines do? | `requests` = HTTP library, `os` = OS tools, `from dotenv import load_dotenv` = grab one function | ✅ Mostly correct |
-| What is `HEADERS` and why send it? | CORS to accept the GitHub token request | 🟡 Wrong concept — CORS is browser-only. `HEADERS` proves identity + sets response format |
-| What is `[f["filename"] for f in files]`? | Finds the filenames in the list called files | ✅ Correct — called a list comprehension |
-| What does `if __name__ == "__main__":` do? | It's the entry point for the code | ✅ Correct — only runs when executed directly, not when imported |
-| What determines PR risk? | The one with the most additions and deletions | ✅ Good instinct — line count is a signal, but file type and context matter too |
+| What does `if __name__ == "__main__":` do? | It's the entry point for the code | ✅ Correct |
 
 ---
 
-## Week 2 — AI Integration
-> 📅 Week 2 ✅ Complete
+## Week 2 — AI Integration ✅ Complete
 
 | Question | Your Answer | Verdict |
 |---|---|---|
 | Why send filenames to Claude, not just line counts? | Because filenames tell Claude what kind of code changed — auth files are riskier than docs | ✅ Correct |
-| Why ask Claude for JSON instead of plain text? | So we can reliably parse the response with `json.loads()` and extract specific fields | ✅ Correct |
-| Why does per-call API cost matter? | At scale, small per-call costs add up — real teams monitor and optimize AI API spend | ✅ Correct |
+| Why ask Claude for JSON instead of plain text? | So we can reliably parse the response with `json.loads()` | ✅ Correct |
+| Why does per-call API cost matter? | At scale, small per-call costs add up | ✅ Correct |
 
 ---
 
-## Week 3 — CLI Polish
-> 📅 Week 3 ✅ Complete
+## Week 3 — CLI Polish ✅ Complete
 
 | Question | Your Answer | Verdict |
 |---|---|---|
-| What happens if you run without --limit? | Uses default value of 5, analyzes first 5 PRs | ✅ Correct |
-| Why use `with open()` instead of plain `open()`? | `with` automatically closes the file when the block ends, even if an error occurs | ✅ Correct |
+| What happens if you run without --limit? | Uses default value of 5 | ✅ Correct |
+| Why use `with open()` instead of plain `open()`? | `with` automatically closes the file even if an error occurs | ✅ Correct |
 
 ---
 
-## Weekend Sprint — Tests, CI, Terraform, Azure
-> 📅 Weekend Sprint 🔄 In progress
+## Weekend Sprint — Tests, CI, Terraform ✅ Complete
 
 | Question | Your Answer | Verdict |
 |---|---|---|
 | What is mock data and why use it in tests? | Simulates GitHub API responses so tests run without real API calls | ✅ Correct |
-| Why does CI use `ubuntu-latest` instead of your local setup? | To guarantee a clean consistent environment that matches production servers | ✅ Correct |
+| Why does CI use `ubuntu-latest`? | Guarantees a clean environment matching production servers | ✅ Correct |
 | What Azure service maps to AWS CodePipeline? | Azure Pipelines | ✅ Correct |
+| What does `terraform plan` do before `terraform apply`? | Previews changes without making them — like git diff before committing | ✅ Correct |
+| Why `ip_address_type = "None"` for a CLI tool? | CLI tools don't serve HTTP — no public endpoint needed | ✅ Correct |
+| Why pull from MCR instead of Docker Hub in Azure? | Docker Hub rate limits cause 409 errors — MCR has no limits | ✅ Correct |
+| Why is 46% coverage still meaningful? | 100% coverage on ai_analyzer.py — the core risk logic — is what matters | ✅ Correct |
 
 ---
 
@@ -1108,11 +1096,13 @@ git config --global user.name "Your Name"
 - [ ] What is `git diff` and when would you use it?
 - [ ] What is token length and how does it affect AI API cost?
 - [ ] How would you cache AI responses to avoid paying for the same PR twice?
-- [ ] What is `terraform apply` doing under the hood?
 - [ ] What is the difference between Azure Pipelines and GitHub Actions YAML syntax?
-- [ ] What is Docker and why do teams containerize applications?
 - [ ] What is Azure RBAC and how does least privilege work in Azure?
+- [ ] How does `DefaultAzureCredential` work and what auth methods does it try?
+- [ ] What is Terraform remote state and why do teams use Azure Blob Storage for it?
+- [ ] How does a GitHub App generate short-lived tokens compared to a PAT?
+- [ ] What is `terraform destroy` and when should you run it?
 
 ---
 
-*Last updated: Week 3 ✅ | Weekend Sprint in progress*
+*Last updated: Azure Deploy Sprint ✅ | All phases complete | Deployed to Azure 2026-08-10*

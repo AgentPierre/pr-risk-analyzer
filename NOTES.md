@@ -37,7 +37,7 @@ Before running any code, answer these three questions:
 
 ---
 
-## Project Status — Sprint Complete ✅
+## Project Status — ✅ COMPLETE
 
 | Phase | Status | Key Outcome |
 |---|---|---|
@@ -45,10 +45,13 @@ Before running any code, answer these three questions:
 | Week 2 — Claude AI integration | ✅ | Rates PR risk LOW/MEDIUM/HIGH |
 | Week 3 — CLI polish | ✅ | --limit and --output flags |
 | Weekend Sprint — Tests & CI | ✅ | pytest suite + GitHub Actions |
-| Infrastructure — Terraform | ✅ | Resource Group, Key Vault, Container Instances deployed |
-| Docker | ✅ | Image builds and runs locally |
+| Infrastructure — Terraform | ✅ | Resource Group, Key Vault, ACR, Container Instances deployed |
+| Docker | ✅ | Image builds locally and pushed to ACR |
 | Refactor — production-ready imports | ✅ | load_dotenv() moved to entrypoint |
 | Azure deployment | ✅ | Live resources in East US |
+| Secrets — Key Vault | ✅ | ANTHROPIC_API_KEY and GITHUB_TOKEN stored in Key Vault |
+| Service Principal | ✅ | Non-personal Azure auth for CI/CD |
+| CI/CD Pipeline — Full | ✅ | Tests → Build → Push ACR → Deploy ACI on every push |
 
 ## Quantifiable Metrics
 
@@ -58,8 +61,13 @@ Before running any code, answer these three questions:
 | Tests passing | 6/6 (5 unit + 1 integration) |
 | Repos tested against | 3 |
 | PRs analyzed | 10 |
-| Azure resources deployed | 3 (Resource Group, Key Vault, Container Instances) |
-| Docker image | pr-risk-analyzer:v1 |
+| Azure resources deployed | 4 (Resource Group, Key Vault, ACR, Container Instances) |
+| Docker image | pranalyzeracr.azurecr.io/pr-risk-analyzer:v1 |
+| CI/CD pipeline runtime | ~1 minute 12 seconds end-to-end |
+
+## Resume Bullet
+
+> "Built a Python CLI tool that uses the GitHub REST API and Claude API to classify open pull requests as LOW, MEDIUM, or HIGH risk and generate plain-English summaries to support secure software development reviews, validated against 10 PRs across 3 open-source repos. Containerized with Docker, provisioned Azure infrastructure (Resource Group, Key Vault, Container Registry, Container Instances) via Terraform IaC, and implemented a CI/CD pipeline in GitHub Actions that automatically builds, pushes to ACR, and deploys to Azure Container Instances on every push — with secrets managed through Azure Key Vault and 46% test coverage including 100% on core risk-analysis logic."
 
 ---
 
@@ -445,12 +453,12 @@ This is called "mocking" — standard practice in every professional codebase. T
 
 # CI/CD & GITHUB ACTIONS
 
-> 📅 Weekend Sprint (pre-internship)
+> 📅 Weekend Sprint → CI/CD Sprint
 
 ---
 
 ### What is CI/CD?
-> 📅 Week 1 concept, implemented Weekend Sprint
+> 📅 Week 1 concept, implemented Weekend Sprint, extended CI/CD Sprint
 
 **CI (Continuous Integration):** Automatically run tests every time code is pushed.
 **CD (Continuous Delivery):** Automatically deploy when tests pass.
@@ -460,17 +468,76 @@ Manual deployments are slow, error-prone, and inconsistent. CI/CD pipelines run 
 
 ---
 
-### GitHub Actions
-> 📅 Weekend Sprint
+### Full CI/CD Pipeline (Final State)
+> 📅 CI/CD Sprint ★
 
-GitHub's built-in CI/CD system. Defined in YAML files under `.github/workflows/`.
+Every push to `main` triggers this sequence automatically:
 
-**Why it works:**
-Every push to GitHub triggers the workflow automatically. GitHub spins up a fresh cloud VM, runs your steps, and reports pass/fail directly in your repo.
+```
+Push to main
+    ↓
+Run unit tests (pytest -m "not integration")
+    ↓ tests pass
+Login to Azure (Service Principal)
+    ↓
+Login to ACR
+    ↓
+Build Docker image
+    ↓
+Push image to ACR
+    ↓
+Deploy to Azure Container Instances (az container start)
+    ↓
+Logout of Azure
+```
+
+**Total pipeline runtime: ~1 minute 12 seconds**
+
+**Key design decisions:**
+- `needs: test` — deploy job only runs if tests pass (fail fast)
+- `if: github.ref == 'refs/heads/main'` — deploy only on main pushes, not PRs
+- `secure_environment_variables` — secrets never appear in logs
+- `az logout` at end — session cleaned up immediately
 
 ---
 
-### CI vs Azure Pipelines
+### Service Principal for CI/CD Authentication ★
+> 📅 CI/CD Sprint
+
+GitHub Actions authenticates to Azure using a Service Principal — not your personal account.
+
+**Why it matters:**
+- Your `.edu` account has conditional access policies that can be triggered by repeated logins
+- Service Principals are app identities with scoped permissions
+- If the SP credentials are compromised, you revoke just the SP — not your whole account
+
+**Key mapping:**
+
+| SP output field | GitHub Actions secret field |
+|---|---|
+| `appId` | `clientId` |
+| `password` | `clientSecret` |
+| `tenant` | `tenantId` |
+| (known) | `subscriptionId` |
+
+**Stored as:** `AZURE_CREDENTIALS` GitHub Actions secret in JSON format.
+
+---
+
+### `az container start` vs `az container restart`
+> 📅 CI/CD Sprint
+
+| Command | Use when |
+|---|---|
+| `az container restart` | Container is running or paused |
+| `az container start` | Container is stopped (ExitCode 0, restart_policy = Never) |
+
+**Why it matters:**
+`restart` on a stopped container throws `ContainerGroupStopped` error. CLI tools with `restart_policy = "Never"` stop after completing — always use `start` to trigger a fresh run.
+
+---
+
+### GitHub Actions vs Azure Pipelines
 > 📅 Weekend Sprint
 
 | | GitHub Actions | Azure Pipelines |
@@ -514,6 +581,7 @@ Your manager specifically named Terraform as the team standard. The goal: enviro
 | `terraform plan` | Preview changes — no modifications made | Always before apply — like `git diff` before commit |
 | `terraform apply` | Actually creates/modifies/destroys resources | After reviewing plan |
 | `terraform destroy` | Tears down all resources | When done — saves money |
+| `terraform destroy -target=resource` | Destroys one specific resource | When you need to recreate just one thing |
 | `terraform state list` | Shows what resources Terraform is tracking | Debugging "no changes" surprises |
 
 **★ Interview-ready answer:** `terraform plan` is safe — it just reads and compares. `terraform apply` is the one that costs money and makes changes.
@@ -592,18 +660,44 @@ When you run `terraform plan`, it compares your `.tf` files against the state fi
 ### Container Group: CLI vs Web Service
 > 📅 Azure Deploy Sprint
 
-For CLI tools that run on demand (not web servers), set `ip_address_type = "None"`:
+For CLI tools that run on demand (not web servers), use these settings:
 
 ```hcl
 resource "azurerm_container_group" "analyzer" {
   ...
-  ip_address_type = "None"  # no public endpoint — CLI tool, not a server
+  ip_address_type = "None"      # no public endpoint — CLI tool, not a server
+  restart_policy  = "Never"     # run once and stop cleanly (ExitCode 0)
   ...
 }
 ```
 
 **Why it works:**
-Azure requires at least one exposed port when `ip_address_type = "Public"`. CLI tools don't listen for HTTP requests — they run a task and exit. `"None"` is the correct pattern.
+- `"None"` avoids the `MissingIpAddressPorts` error Azure throws for public containers without exposed ports
+- `"Never"` stops Azure from restarting the container after it finishes — which would cause infinite restart loops
+
+---
+
+### Key Vault Data Sources in Terraform
+> 📅 CI/CD Sprint
+
+Read secrets from Key Vault at deploy time using `data` blocks:
+
+```hcl
+data "azurerm_key_vault_secret" "anthropic_key" {
+  name         = "anthropic-api-key"
+  key_vault_id = azurerm_key_vault.main.id
+}
+```
+
+Then reference in container:
+```hcl
+secure_environment_variables = {
+  ANTHROPIC_API_KEY = data.azurerm_key_vault_secret.anthropic_key.value
+}
+```
+
+**Why `secure_environment_variables` not `environment_variables`:**
+Secure vars are redacted in all logs, portal output, and `terraform plan` output. Regular vars show in plain text.
 
 ---
 
@@ -611,7 +705,7 @@ Azure requires at least one exposed port when `ip_address_type = "Public"`. CLI 
 
 # AZURE
 
-> 📅 Weekend Sprint + Azure Deploy Sprint
+> 📅 Weekend Sprint + Azure Deploy Sprint + CI/CD Sprint
 
 ---
 
@@ -643,6 +737,7 @@ Tenant (your org's Microsoft account)
   └── Subscription (billing boundary — your Azure for Students sub)
         └── Resource Group (logical container — pr-risk-analyzer-rg)
               ├── Key Vault (pr-analyzer-vault)
+              ├── Container Registry (pranalyzeracr)
               └── Container Instances (pr-risk-analyzer)
 ```
 
@@ -652,27 +747,20 @@ Thomas mentioned subscriptions constantly. Permissions, billing, and resource ma
 ---
 
 ### Azure Key Vault
-> 📅 Azure Deploy Sprint
+> 📅 Azure Deploy Sprint + CI/CD Sprint ✅ Done
 
 Azure's secrets management service — stores API keys, tokens, and passwords securely.
 
-**Why it works:**
-Apps read secrets from Key Vault at runtime instead of storing them in code. Access is controlled by Azure RBAC — only authorized identities can read specific secrets.
-
-**Good to know:**
-Next step for this project: migrate GitHub PAT and Claude API key from `.env` into Key Vault, and read them at runtime using `DefaultAzureCredential`.
+**Current state:** `ANTHROPIC_API_KEY` and `GITHUB_TOKEN` stored in Key Vault and injected into Container Instances at deploy time via Terraform `secure_environment_variables`.
 
 ---
 
-### Azure Container Instances vs Container Registry
-> 📅 Azure Deploy Sprint
+### Azure Container Registry (ACR)
+> 📅 CI/CD Sprint ✅ Done
 
-| Service | What it is | AWS equivalent |
-|---|---|---|
-| Container Registry (ACR) | Stores Docker images | ECR |
-| Container Instances | Runs Docker images | ECS / Fargate |
+Private Docker image registry — stores your built images for Container Instances to pull.
 
-**Flow:** Build image → push to ACR → Container Instances pulls from ACR and runs it.
+**Current state:** `pranalyzeracr.azurecr.io/pr-risk-analyzer:v1` is live and being deployed automatically by GitHub Actions on every push.
 
 ---
 
@@ -707,15 +795,10 @@ A tool that packages your application and all its dependencies into a container 
 **Why it works:**
 Without Docker, "it works on my machine" is a constant problem. With Docker, the container is the machine — it runs the same on your laptop, in CI, and in Azure.
 
-**Good to know:**
-The Docker image is like a snapshot of your entire running environment — Python version, packages, code — frozen at build time.
-
 ---
 
 ### Dockerfile
 > 📅 Azure Deploy Sprint
-
-The recipe Docker follows to build your image.
 
 ```dockerfile
 FROM python:3.11-slim          # start from Python 3.11 base image
@@ -728,38 +811,33 @@ ENTRYPOINT ["python", "analyze.py"]  # run this when container starts
 ```
 
 **Why `requirements.txt` before code:**
-Docker caches layers. If you copy code first, every code change rebuilds the pip install layer. Copying requirements first means pip only re-runs when requirements change.
+Docker caches layers. Copying requirements first means pip only re-runs when requirements change — not on every code change.
 
 ---
 
 ### Key Docker Commands
-> 📅 Azure Deploy Sprint
+> 📅 Azure Deploy Sprint + CI/CD Sprint
 
 | Command | What it does |
 |---|---|
 | `docker build -t name:tag .` | Builds image from Dockerfile in current directory |
-| `docker run name:tag --help` | Runs container with `--help` argument |
 | `docker run --env-file .env name:tag --repo x/y` | Runs container with secrets from `.env` |
-| `docker images` | Lists all local images |
-| `az acr build --registry <name> --image name:tag .` | Builds and pushes directly to Azure Container Registry |
+| `docker tag name:tag registry/name:tag` | Tags image for a specific registry |
+| `docker push registry/name:tag` | Pushes image to a registry |
+| `az acr login --name <acr>` | Authenticates Docker to push to ACR |
 
 ---
 
 ### Passing Secrets to Containers
-> 📅 Azure Deploy Sprint
-
-Containers don't have `.env` files. Secrets are passed at runtime:
+> 📅 Azure Deploy Sprint + CI/CD Sprint
 
 ```bash
 # Local development
 docker run --env-file .env pr-risk-analyzer:v1 --repo owner/repo
 
-# In Azure (via Terraform)
-# Container Instances reads secrets from Key Vault at startup
+# In Azure (via Terraform secure_environment_variables)
+# Terraform reads from Key Vault and injects at deploy time
 ```
-
-**Why it works:**
-The container image contains no secrets — it's safe to store in a registry. Secrets are injected at runtime by the orchestration layer (Docker CLI locally, Terraform/Key Vault in Azure).
 
 ---
 
@@ -767,42 +845,53 @@ The container image contains no secrets — it's safe to store in a registry. Se
 
 # SECURITY & SECRETS
 
-> 📅 Week 1 + Refactor Sprint
+> 📅 Week 1 + Refactor Sprint + CI/CD Sprint
 
 ---
 
-### PAT Token vs GitHub App ★
-> 📅 Refactor Sprint
+### PAT Token vs Service Principal vs GitHub App ★
+> 📅 CI/CD Sprint
 
-| | PAT Token | GitHub App |
-|---|---|---|
-| Lifespan | Long-lived (weeks/months) | Short-lived (1 hour, auto-rotated) |
-| Scope | User-level access | Repo-level, minimal permissions |
-| Risk if exposed | High — broad access | Low — scoped, expires fast |
-| Used for | Local dev, quick testing | Production deployments |
+| | PAT Token | Service Principal | GitHub App |
+|---|---|---|---|
+| Lifespan | Long-lived | Configurable | 1 hour (auto-rotated) |
+| Scope | User-level | Subscription-level | Repo-level |
+| Risk if exposed | High | Medium | Low |
+| Used for | Local dev | CI/CD pipelines | Production GitHub auth |
 
-**Next step for this project:** Migrate from PAT to GitHub App + Key Vault for production-grade auth.
+**Current state:** Service Principal (`pr-risk-analyzer-sp`) used for GitHub Actions → Azure auth.
 
 ---
 
-### `.env` vs Key Vault vs GitHub Actions Secrets
-> 📅 Refactor Sprint
+### Secret Storage Progression
+> 📅 CI/CD Sprint
 
-| Where | Use case | Risk |
-|---|---|---|
-| `.env` file | Local development only | Never commit |
-| GitHub Actions secrets | CI/CD pipelines | Safe — encrypted, not in logs |
-| Azure Key Vault | Production deployments | Most secure — RBAC controlled |
+| Where | Use case |
+|---|---|
+| `.env` file | Local development only — never commit |
+| GitHub Actions secrets | CI/CD pipelines — `AZURE_CREDENTIALS` lives here |
+| Azure Key Vault | Production runtime — `ANTHROPIC_API_KEY`, `GITHUB_TOKEN` live here |
 
-**Good to know:**
-The progression from `.env` → GitHub Actions secrets → Key Vault mirrors how production teams handle secrets as systems mature.
+**Why this progression matters:**
+Each layer adds security. `.env` → GitHub secrets → Key Vault mirrors how real teams mature their secret management.
+
+---
+
+### Never Paste Secrets in Chat ★
+> 📅 CI/CD Sprint — learned the hard way
+
+If a secret is ever posted publicly (chat, GitHub, Slack), treat it as compromised immediately:
+1. Rotate it right away (`az ad sp credential reset`)
+2. Check Azure activity logs for unauthorized use
+3. Update any systems using the old secret
+
+**Why:** Secrets in chat logs, screenshots, or commit history are permanently exposed — even after deletion.
 
 ---
 
 ### `.gitignore` Non-Negotiables
 > 📅 Week 1
 
-Always gitignore before first commit:
 ```
 .env
 .venv/
@@ -815,8 +904,6 @@ reports/*.txt
 *.swp
 ```
 
-**Why:** A committed secret lives in Git history permanently — removing it requires rewriting history, which is painful and risky.
-
 ---
 
 ---
@@ -828,7 +915,7 @@ reports/*.txt
 ---
 
 ### Infrastructure as Code (IaC) ★
-> 📅 Introduced Week 1, implemented Azure Deploy Sprint
+> 📅 Introduced Week 1, implemented and completed CI/CD Sprint
 
 The practice of managing and provisioning infrastructure through code rather than manual processes.
 
@@ -883,30 +970,8 @@ The practice of evaluating how risky a pull request is before merging it.
 Always ask for JSON instead of plain text when building tools:
 
 ```python
-# In the prompt:
 "Respond ONLY with valid JSON: {\"risk_level\": \"HIGH\", \"summary\": \"...\"}"
-
-# In the code:
 result = json.loads(raw_response)
-risk = result["risk_level"]
-```
-
-**Why:** Plain text has no reliable structure to extract from. JSON is always parseable.
-
----
-
-### Cleaning AI Responses Before Parsing
-> 📅 Week 2
-
-Claude sometimes wraps JSON in markdown code fences. Strip before `json.loads()`:
-
-```python
-raw = raw.strip()
-if raw.startswith("```"):
-    raw = raw.split("```")[1]
-    if raw.startswith("json"):
-        raw = raw[4:]
-raw = raw.strip()
 ```
 
 ---
@@ -918,8 +983,6 @@ Model names use **hyphens only** — no dots:
 - ✅ `claude-haiku-4-5-20251001`
 - ❌ `claude-haiku-4.5-20251001`
 
-Check for deprecation warnings in test output — they tell you which model to migrate to.
-
 ---
 
 ---
@@ -930,22 +993,7 @@ Check for deprecation warnings in test output — they tell you which model to m
 
 ---
 
-### HTTP Headers
-> 📅 Week 1
-
-| Header | Purpose |
-|---|---|
-| `Authorization: Bearer <token>` | Prove identity |
-| `Accept: application/json` | Request JSON format |
-| `Content-Type: application/json` | Declare you're sending JSON |
-
-**Good to know:**
-CORS is a browser security concept — it does NOT apply to Python scripts.
-
----
-
 ### HTTP Status Codes That Matter for This Project
-> 📅 Week 1 + Azure Deploy Sprint
 
 | Code | Meaning | Where you saw it |
 |---|---|---|
@@ -961,7 +1009,7 @@ CORS is a browser security concept — it does NOT apply to Python scripts.
 
 # ERRORS & FIXES
 
-> 📅 Week 1 — Azure Deploy Sprint | Running log of every error encountered
+> 📅 Week 1 — CI/CD Sprint | Running log of every error encountered
 
 ---
 
@@ -971,65 +1019,55 @@ CORS is a browser security concept — it does NOT apply to Python scripts.
 
 ---
 
-### `json.decoder.JSONDecodeError: Expecting value`
-- **Cause:** Claude wrapped JSON response in markdown code fences
-- **Fix:** Strip code fences before `json.loads()`
-
----
-
-### `anthropic.NotFoundError: model: claude-sonnet-4-20250514`
-> 📅 Refactor Sprint
-- **Cause:** Deprecated model name
-- **Fix:** Update to `claude-haiku-4-5-20251001` (note hyphens, not dots)
-
----
-
 ### `anthropic.NotFoundError: model: claude-haiku-4.5-20251001`
-> 📅 Refactor Sprint
 - **Cause:** Dots in model name instead of hyphens
 - **Fix:** `claude-haiku-4-5-20251001` (all hyphens)
 
 ---
 
 ### `Terraform: Value for undeclared variable`
-> 📅 Azure Deploy Sprint
 - **Cause:** Variable exists in `terraform.tfvars` but has no `variable` block in `main.tf`
-- **Fix:** Add `variable "name" { description = "..." }` block to `main.tf` for each undeclared variable
-
----
-
-### `Terraform: Inconsistent dependency lock file`
-> 📅 Azure Deploy Sprint
-- **Cause:** `main.tf` was rewritten, provider lock file is now out of sync
-- **Fix:** `terraform init` re-downloads providers and updates the lock file
+- **Fix:** Add `variable "name" { description = "..." }` block to `main.tf`
 
 ---
 
 ### `MissingIpAddressPorts: ports in 'ipAddress' cannot be empty`
-> 📅 Azure Deploy Sprint
 - **Cause:** `ip_address_type = "Public"` requires at least one port
-- **Fix:** Set `ip_address_type = "None"` for CLI tools that don't serve HTTP
+- **Fix:** Set `ip_address_type = "None"` for CLI tools
 
 ---
 
 ### `409 Conflict: RegistryErrorResponse: error from docker registry`
-> 📅 Azure Deploy Sprint
 - **Cause:** Docker Hub rate limiting Azure's pull request
-- **Fix:** Use `mcr.microsoft.com/devcontainers/python:3.11` instead of `python:3.11-slim`
+- **Fix:** Use `mcr.microsoft.com/devcontainers/python:3.11`
 
 ---
 
-### `ERROR: failed to build: Dockerfile: no such file or directory`
-> 📅 Azure Deploy Sprint
-- **Cause:** No Dockerfile in the project root
-- **Fix:** Create `Dockerfile` with FROM, WORKDIR, COPY, RUN, ENTRYPOINT instructions
+### `ContainerGroupStopped: Container Group is stopped`
+> 📅 CI/CD Sprint
+- **Cause:** `az container restart` used on a stopped container
+- **Fix:** Use `az container start` instead
 
 ---
 
-### `docker: command not found` in WSL2
+### `Login failed: Not all parameters are provided in 'creds'`
+> 📅 CI/CD Sprint
+- **Cause:** `AZURE_CREDENTIALS` secret had wrong field names (`appId` instead of `clientId`)
+- **Fix:** Map fields correctly: `appId → clientId`, `password → clientSecret`, `tenant → tenantId`
+
+---
+
+### `TasksOperationsNotAllowed: ACR Tasks not permitted`
+> 📅 CI/CD Sprint
+- **Cause:** Azure for Students blocks `az acr build` (cloud-side builds)
+- **Fix:** Build locally with `docker build`, tag with ACR URL, push with `docker push`
+
+---
+
+### `InternalServerError` on `az container logs`
 > 📅 Azure Deploy Sprint
-- **Cause:** Docker not installed in WSL2 Ubuntu
-- **Fix:** `curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh`
+- **Cause:** Azure for Students subscription limitation on log streaming for terminated containers
+- **Fix:** Verify tool works locally with same env vars; use ExitCode 0 + restart count 0 as proxy evidence
 
 ---
 
@@ -1039,48 +1077,44 @@ CORS is a browser security concept — it does NOT apply to Python scripts.
 
 ---
 
-## Week 1 — Environment & GitHub Client ✅ Complete
+## Week 1 — Environment & GitHub Client ✅
 
 | Question | Your Answer | Verdict |
 |---|---|---|
-| What does `load_dotenv()` do? | Reads the .env file and loads values so `os.getenv()` can access them | ✅ Correct |
-| What does `raise_for_status()` do? | Raises an error immediately if the request returned 4xx or 5xx | ✅ Correct |
-| What is a generator expression? | A compact way to loop and compute a value in one line | ✅ Correct |
-| What is a virtual environment? | Isolates project packages from the system Python | ✅ Correct |
-| What does `if __name__ == "__main__":` do? | It's the entry point for the code | ✅ Correct |
+| What does `load_dotenv()` do? | Reads the .env file and loads values so `os.getenv()` can access them | ✅ |
+| What does `raise_for_status()` do? | Raises an error immediately if the request returned 4xx or 5xx | ✅ |
+| What is a virtual environment? | Isolates project packages from the system Python | ✅ |
 
 ---
 
-## Week 2 — AI Integration ✅ Complete
+## Week 2 — AI Integration ✅
 
 | Question | Your Answer | Verdict |
 |---|---|---|
-| Why send filenames to Claude, not just line counts? | Because filenames tell Claude what kind of code changed — auth files are riskier than docs | ✅ Correct |
-| Why ask Claude for JSON instead of plain text? | So we can reliably parse the response with `json.loads()` | ✅ Correct |
-| Why does per-call API cost matter? | At scale, small per-call costs add up | ✅ Correct |
+| Why send filenames to Claude, not just line counts? | Filenames tell Claude what kind of code changed — auth files are riskier than docs | ✅ |
+| Why ask Claude for JSON instead of plain text? | So we can reliably parse the response with `json.loads()` | ✅ |
 
 ---
 
-## Week 3 — CLI Polish ✅ Complete
+## Weekend Sprint — Tests, CI, Terraform ✅
 
 | Question | Your Answer | Verdict |
 |---|---|---|
-| What happens if you run without --limit? | Uses default value of 5 | ✅ Correct |
-| Why use `with open()` instead of plain `open()`? | `with` automatically closes the file even if an error occurs | ✅ Correct |
+| What is mock data and why use it in tests? | Simulates GitHub API responses so tests run without real API calls | ✅ |
+| What does `terraform plan` do before `terraform apply`? | Previews changes without making them — like git diff before committing | ✅ |
+| Why `ip_address_type = "None"` for a CLI tool? | CLI tools don't serve HTTP — no public endpoint needed | ✅ |
+| Why pull from MCR instead of Docker Hub in Azure? | Docker Hub rate limits cause 409 errors — MCR has no limits | ✅ |
 
 ---
 
-## Weekend Sprint — Tests, CI, Terraform ✅ Complete
+## CI/CD Sprint ✅
 
 | Question | Your Answer | Verdict |
 |---|---|---|
-| What is mock data and why use it in tests? | Simulates GitHub API responses so tests run without real API calls | ✅ Correct |
-| Why does CI use `ubuntu-latest`? | Guarantees a clean environment matching production servers | ✅ Correct |
-| What Azure service maps to AWS CodePipeline? | Azure Pipelines | ✅ Correct |
-| What does `terraform plan` do before `terraform apply`? | Previews changes without making them — like git diff before committing | ✅ Correct |
-| Why `ip_address_type = "None"` for a CLI tool? | CLI tools don't serve HTTP — no public endpoint needed | ✅ Correct |
-| Why pull from MCR instead of Docker Hub in Azure? | Docker Hub rate limits cause 409 errors — MCR has no limits | ✅ Correct |
-| Why is 46% coverage still meaningful? | 100% coverage on ai_analyzer.py — the core risk logic — is what matters | ✅ Correct |
+| Why does `needs: test` matter in the pipeline? | Deploy job only runs if tests pass — fail fast principle | ✅ |
+| Why use a Service Principal instead of az login? | Protects .edu account from conditional access triggers; scoped app identity | ✅ |
+| Why `az container start` not `az container restart`? | restart fails on stopped containers; start works regardless of state | ✅ |
+| Why use `secure_environment_variables`? | Values are redacted in all logs and portal output | ✅ |
 
 ---
 
@@ -1102,7 +1136,9 @@ CORS is a browser security concept — it does NOT apply to Python scripts.
 - [ ] What is Terraform remote state and why do teams use Azure Blob Storage for it?
 - [ ] How does a GitHub App generate short-lived tokens compared to a PAT?
 - [ ] What is `terraform destroy` and when should you run it?
+- [ ] What is the difference between `restart_policy = "Never"` and `"Always"` in Azure Container Instances?
+- [ ] How would you add Application Insights to monitor the container in production?
 
 ---
 
-*Last updated: Azure Deploy Sprint ✅ | All phases complete | Deployed to Azure 2026-08-10*
+*Last updated: CI/CD Sprint ✅ | Project complete | Pipeline live 2026-08-11*

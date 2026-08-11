@@ -100,6 +100,11 @@ jobs:
             azurerm_key_vault.main \
             /subscriptions/5ad1464e-4243-495c-bc18-05ea61733c45/resourceGroups/pr-risk-analyzer-rg/providers/Microsoft.KeyVault/vaults/pr-analyzer-vault
 
+          echo "--- Importing Key Vault Access Policy ---"
+          terraform import -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            azurerm_key_vault_access_policy.sp_policy \
+            "/subscriptions/5ad1464e-4243-495c-bc18-05ea61733c45/resourceGroups/pr-risk-analyzer-rg/providers/Microsoft.KeyVault/vaults/pr-analyzer-vault/objectId/90cda166-5d69-47d9-bf0c-bc7e05f86ff5"
+
           echo "--- Importing ACR ---"
           terraform import -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
             azurerm_container_registry.acr \

@@ -47,16 +47,68 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Create Terraform state storage
+        run: |
+          # Create storage account for remote state if it doesn't exist
+          az storage account create \
+            --name pranalyzertfstate \
+            --resource-group pr-risk-analyzer-rg \
+            --location eastus \
+            --sku Standard_LRS \
+            --allow-blob-public-access false 2>/dev/null || echo "Storage account already exists"
+
+          az storage container create \
+            --name tfstate \
+            --account-name pranalyzertfstate 2>/dev/null || echo "Container already exists"
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
         run: terraform init
         working-directory: infrastructure
+        env:
+          ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+          ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+          ARM_SUBSCRIPTION_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
+          ARM_TENANT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
+
+      - name: Import existing resources
+        working-directory: infrastructure
+        env:
+          ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+          ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+          ARM_SUBSCRIPTION_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
+          ARM_TENANT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
+        run: |
+          terraform import -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            azurerm_resource_group.main \
+            /subscriptions/5ad1464e-4243-495c-bc18-05ea61733c45/resourceGroups/pr-risk-analyzer-rg \
+            2>/dev/null || echo "Resource group already in state"
+
+          terraform import -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            azurerm_key_vault.main \
+            /subscriptions/5ad1464e-4243-495c-bc18-05ea61733c45/resourceGroups/pr-risk-analyzer-rg/providers/Microsoft.KeyVault/vaults/pr-analyzer-vault \
+            2>/dev/null || echo "Key Vault already in state"
+
+          terraform import -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            azurerm_container_registry.acr \
+            /subscriptions/5ad1464e-4243-495c-bc18-05ea61733c45/resourceGroups/pr-risk-analyzer-rg/providers/Microsoft.ContainerRegistry/registries/pranalyzeracr \
+            2>/dev/null || echo "ACR already in state"
+
+          terraform import -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            azurerm_container_group.analyzer \
+            /subscriptions/5ad1464e-4243-495c-bc18-05ea61733c45/resourceGroups/pr-risk-analyzer-rg/providers/Microsoft.ContainerInstance/containerGroups/pr-risk-analyzer \
+            2>/dev/null || echo "Container group already in state"
 
       - name: Terraform Apply
         run: terraform apply -auto-approve -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}"
         working-directory: infrastructure
+        env:
+          ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+          ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+          ARM_SUBSCRIPTION_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
+          ARM_TENANT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
 
       - name: Logout of Azure
         run: az logout

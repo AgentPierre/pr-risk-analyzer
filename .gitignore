@@ -5,3 +5,8 @@ __pycache__/
 report.txt
 reports/*.txt
 .coverage
+**/.terraform/
+*.tfstate
+*.tfstate.lock.info
+*.tfstate.backup
+*.swp

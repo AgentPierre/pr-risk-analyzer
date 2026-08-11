@@ -26,6 +26,17 @@ resource "azurerm_key_vault" "main" {
   sku_name            = "standard"
 }
 
+# Read secrets from Key Vault at deploy time
+data "azurerm_key_vault_secret" "anthropic_key" {
+  name         = "anthropic-api-key"
+  key_vault_id = azurerm_key_vault.main.id
+}
+
+data "azurerm_key_vault_secret" "github_token" {
+  name         = "github-token"
+  key_vault_id = azurerm_key_vault.main.id
+}
+
 # Container group — runs the analyzer tool
 resource "azurerm_container_group" "analyzer" {
   name                = "pr-risk-analyzer"
@@ -33,15 +44,36 @@ resource "azurerm_container_group" "analyzer" {
   resource_group_name = azurerm_resource_group.main.name
   os_type             = "Linux"
   ip_address_type     = "None"
+  restart_policy      = "Never"
+
+  image_registry_credential {
+    server   = azurerm_container_registry.acr.login_server
+    username = azurerm_container_registry.acr.admin_username
+    password = azurerm_container_registry.acr.admin_password
+  }
 
   container {
     name   = "analyzer"
-    image = "mcr.microsoft.com/devcontainers/python:3.11"
-    cpu    = "0.5"
-    memory = "1.5"
+    image  = "${azurerm_container_registry.acr.login_server}/pr-risk-analyzer:v1"
+    cpu    = 0.5
+    memory = 1.5
 
     commands = ["python", "analyze.py", "--repo", "kubernetes/kubernetes", "--limit", "5"]
+
+    secure_environment_variables = {
+      ANTHROPIC_API_KEY = data.azurerm_key_vault_secret.anthropic_key.value
+      GITHUB_TOKEN      = data.azurerm_key_vault_secret.github_token.value
+    }
   }
+}
+
+# Azure Container Registry — stores the Docker image
+resource "azurerm_container_registry" "acr" {
+  name                = "pranalyzeracr"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  sku                 = "Basic"
+  admin_enabled       = true
 }
 
 variable "resource_group_name" {

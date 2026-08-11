@@ -9,4 +9,6 @@ reports/*.txt
 *.tfstate
 *.tfstate.lock.info
 *.tfstate.backup
+*.tfvars
+!*.tfvars.example
 *.swp

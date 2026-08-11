@@ -61,6 +61,13 @@ jobs:
             --account-name pranalyzertfstate \
             --auth-mode login || echo "Container already exists"
 
+      - name: Grant Service Principal Key Vault access (breaks chicken-and-egg with Terraform data sources)
+        run: |
+          az keyvault set-policy \
+            --name pr-analyzer-vault \
+            --spn "${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}" \
+            --secret-permissions get list
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -73,7 +80,7 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
           ARM_TENANT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
 
-      - name: Import existing resources (errors visible, safe to ignore "already in state")
+      - name: Import existing resources (safe to ignore "already managed" or "non-existent object" errors)
         working-directory: infrastructure
         env:
           ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
@@ -98,12 +105,12 @@ jobs:
             azurerm_container_registry.acr \
             /subscriptions/5ad1464e-4243-495c-bc18-05ea61733c45/resourceGroups/pr-risk-analyzer-rg/providers/Microsoft.ContainerRegistry/registries/pranalyzeracr
 
-          echo "--- Importing Container Group ---"
+          echo "--- Importing Container Group (may not exist if a prior run destroyed it — that's fine, apply will create it fresh) ---"
           terraform import -var="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
             azurerm_container_group.analyzer \
             /subscriptions/5ad1464e-4243-495c-bc18-05ea61733c45/resourceGroups/pr-risk-analyzer-rg/providers/Microsoft.ContainerInstance/containerGroups/pr-risk-analyzer
 
-          echo "--- Import step complete (errors above are expected/safe if a resource was already imported in a prior run) ---"
+          echo "--- Import step complete ---"
           exit 0
 
       - name: Terraform Apply

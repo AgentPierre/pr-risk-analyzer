@@ -37,7 +37,7 @@ Before running any code, answer these three questions:
 
 ---
 
-## Project Status — ✅ COMPLETE
+## Project Status — ✅ COMPLETE & CLOSED OUT
 
 | Phase | Status | Key Outcome |
 |---|---|---|
@@ -45,13 +45,17 @@ Before running any code, answer these three questions:
 | Week 2 — Claude AI integration | ✅ | Rates PR risk LOW/MEDIUM/HIGH |
 | Week 3 — CLI polish | ✅ | --limit and --output flags |
 | Weekend Sprint — Tests & CI | ✅ | pytest suite + GitHub Actions |
-| Infrastructure — Terraform | ✅ | Resource Group, Key Vault, ACR, Container Instances deployed |
+| Infrastructure — Terraform | ✅ | Resource Group, Key Vault, ACR, Container Instances, Log Analytics deployed |
 | Docker | ✅ | Image builds locally and pushed to ACR |
 | Refactor — production-ready imports | ✅ | load_dotenv() moved to entrypoint |
 | Azure deployment | ✅ | Live resources in East US |
 | Secrets — Key Vault | ✅ | ANTHROPIC_API_KEY and GITHUB_TOKEN stored in Key Vault |
-| Service Principal | ✅ | Non-personal Azure auth for CI/CD |
-| CI/CD Pipeline — Full | ✅ | Tests → Build → Push ACR → Deploy ACI on every push |
+| Service Principal | ✅ | Non-personal Azure auth for CI/CD, .edu account never touched |
+| CI/CD Pipeline — Full | ✅ | Tests → Terraform Apply → Build → Push ACR → Deploy ACI on every push |
+| Remote Terraform state | ✅ | Azure Blob Storage backend — shared between local and CI |
+| Log Analytics | ✅ | Deployed for future log persistence beyond container termination |
+
+**Final pipeline run: all 3 jobs green (Run Tests → Terraform Apply → Build, Push, Deploy)**
 
 ## Quantifiable Metrics
 
@@ -61,13 +65,14 @@ Before running any code, answer these three questions:
 | Tests passing | 6/6 (5 unit + 1 integration) |
 | Repos tested against | 3 |
 | PRs analyzed | 10 |
-| Azure resources deployed | 4 (Resource Group, Key Vault, ACR, Container Instances) |
+| Azure resources deployed | 5 (Resource Group, Key Vault, ACR, Container Instances, Log Analytics) |
 | Docker image | pranalyzeracr.azurecr.io/pr-risk-analyzer:v1 |
-| CI/CD pipeline runtime | ~1 minute 12 seconds end-to-end |
+| CI/CD pipeline runtime | ~1 minute 12 seconds (build/push/deploy stage) |
+| Terraform state | Remote, in Azure Blob Storage (shared local ↔ CI) |
 
-## Resume Bullet
+## Resume Bullet (Final)
 
-> "Built a Python CLI tool that uses the GitHub REST API and Claude API to classify open pull requests as LOW, MEDIUM, or HIGH risk and generate plain-English summaries to support secure software development reviews, validated against 10 PRs across 3 open-source repos. Containerized with Docker, provisioned Azure infrastructure (Resource Group, Key Vault, Container Registry, Container Instances) via Terraform IaC, and implemented a CI/CD pipeline in GitHub Actions that automatically builds, pushes to ACR, and deploys to Azure Container Instances on every push — with secrets managed through Azure Key Vault and 46% test coverage including 100% on core risk-analysis logic."
+> "Built a Python CLI tool that uses the GitHub REST API and Claude API to classify open pull requests as LOW, MEDIUM, or HIGH risk and generate plain-English summaries to support secure software development reviews, validated against 10 PRs across 3 open-source repos. Containerized with Docker, provisioned Azure infrastructure (Resource Group, Key Vault, Container Registry, Container Instances, Log Analytics) via Terraform IaC with remote state, and implemented a CI/CD pipeline in GitHub Actions that automatically tests, applies infrastructure changes, builds, pushes to ACR, and deploys on every push — with secrets managed through Azure Key Vault and 46% test coverage including 100% on core risk-analysis logic."
 
 ---
 
@@ -453,7 +458,7 @@ This is called "mocking" — standard practice in every professional codebase. T
 
 # CI/CD & GITHUB ACTIONS
 
-> 📅 Weekend Sprint → CI/CD Sprint
+> 📅 Weekend Sprint → CI/CD Sprint → Infra Hardening Sprint
 
 ---
 
@@ -468,36 +473,40 @@ Manual deployments are slow, error-prone, and inconsistent. CI/CD pipelines run 
 
 ---
 
-### Full CI/CD Pipeline (Final State)
-> 📅 CI/CD Sprint ★
+### Full CI/CD Pipeline (Final State) ★
+> 📅 Infra Hardening Sprint — final version
 
-Every push to `main` triggers this sequence automatically:
+Every push to `main` triggers three jobs in sequence:
 
 ```
-Push to main
-    ↓
-Run unit tests (pytest -m "not integration")
+Job 1: Run Tests
+    ↓ pytest -m "not integration" --cov
     ↓ tests pass
-Login to Azure (Service Principal)
-    ↓
-Login to ACR
-    ↓
-Build Docker image
-    ↓
-Push image to ACR
-    ↓
-Deploy to Azure Container Instances (az container start)
-    ↓
-Logout of Azure
-```
 
-**Total pipeline runtime: ~1 minute 12 seconds**
+Job 2: Terraform Apply
+    ↓ Login to Azure (Service Principal)
+    ↓ Create Terraform remote state storage (idempotent)
+    ↓ Grant SP Key Vault access via CLI (breaks chicken-and-egg)
+    ↓ terraform init (connects to remote state)
+    ↓ terraform import (existing resources — safe to no-op if already imported)
+    ↓ terraform apply (creates/updates Log Analytics, access policy, container group)
+    ↓ Logout of Azure
+
+Job 3: Build, Push, Deploy
+    ↓ Login to Azure (Service Principal)
+    ↓ Login to ACR
+    ↓ docker build
+    ↓ docker push to ACR
+    ↓ az container start (fresh run pulling latest image)
+    ↓ Logout of Azure
+```
 
 **Key design decisions:**
-- `needs: test` — deploy job only runs if tests pass (fail fast)
-- `if: github.ref == 'refs/heads/main'` — deploy only on main pushes, not PRs
+- `needs: test` / `needs: terraform` — each job only runs if the previous one passes (fail fast, in order)
+- `if: github.ref == 'refs/heads/main'` — infra/deploy jobs skip on PRs, only run on main
 - `secure_environment_variables` — secrets never appear in logs
-- `az logout` at end — session cleaned up immediately
+- `az logout` at end of every job — session cleaned up immediately
+- Import step uses `set +e` and explicit `echo` markers per resource — makes debugging real failures possible instead of hiding all errors behind `2>/dev/null`
 
 ---
 
@@ -507,9 +516,10 @@ Logout of Azure
 GitHub Actions authenticates to Azure using a Service Principal — not your personal account.
 
 **Why it matters:**
-- Your `.edu` account has conditional access policies that can be triggered by repeated logins
+- A `.edu` account can have conditional access policies that flag repeated/automated logins
 - Service Principals are app identities with scoped permissions
 - If the SP credentials are compromised, you revoke just the SP — not your whole account
+- Every single Azure-touching step in the final pipeline uses `azure/login@v1` with `AZURE_CREDENTIALS` — the personal account is never contacted, anywhere in the pipeline
 
 **Key mapping:**
 
@@ -521,6 +531,8 @@ GitHub Actions authenticates to Azure using a Service Principal — not your per
 | (known) | `subscriptionId` |
 
 **Stored as:** `AZURE_CREDENTIALS` GitHub Actions secret in JSON format.
+
+**Also usable as local env vars** (`ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, `ARM_SUBSCRIPTION_ID`, `ARM_TENANT_ID`) so Terraform can authenticate locally without `az login` at all — the professional pattern for local IaC development against enterprise subscriptions.
 
 ---
 
@@ -555,7 +567,7 @@ The concepts are identical — YAML config, triggered on push, runs steps in ord
 
 # TERRAFORM & IAC
 
-> 📅 Weekend Sprint + Azure Deploy Sprint
+> 📅 Weekend Sprint → Azure Deploy Sprint → Infra Hardening Sprint
 
 ---
 
@@ -577,69 +589,92 @@ Your manager specifically named Terraform as the team standard. The goal: enviro
 
 | Command | What it does | When to use |
 |---|---|---|
-| `terraform init` | Downloads provider plugins | Once per project, or after changing providers |
+| `terraform init` | Downloads provider plugins, connects to backend | Once per project, or after changing providers/backend |
 | `terraform plan` | Preview changes — no modifications made | Always before apply — like `git diff` before commit |
 | `terraform apply` | Actually creates/modifies/destroys resources | After reviewing plan |
 | `terraform destroy` | Tears down all resources | When done — saves money |
 | `terraform destroy -target=resource` | Destroys one specific resource | When you need to recreate just one thing |
+| `terraform import ADDRESS ID` | Brings an existing real resource into Terraform state | When a resource was created outside Terraform, or state was lost |
 | `terraform state list` | Shows what resources Terraform is tracking | Debugging "no changes" surprises |
 
 **★ Interview-ready answer:** `terraform plan` is safe — it just reads and compares. `terraform apply` is the one that costs money and makes changes.
 
 ---
 
-### Terraform File Structure
-> 📅 Weekend Sprint
+### Terraform Remote State (Azure Blob Storage Backend) ★
+> 📅 Infra Hardening Sprint
 
-```
-infrastructure/
-├── main.tf                    # resource definitions + variable declarations
-├── terraform.tfvars           # actual values (gitignored — has tenant_id)
-├── terraform.tfvars.example   # safe template to commit
-└── .terraform.lock.hcl        # locks provider versions (commit this)
-```
+By default, `terraform.tfstate` lives only on the machine that ran `terraform apply`. That breaks the moment two different environments (your laptop and GitHub Actions) both need to manage the same infrastructure — each would think the other's resources don't exist and try to recreate them.
 
-**Why it works:**
-Separating definitions from values means the same config works across dev, staging, and prod by swapping `.tfvars` files.
-
-**Good to know:**
-`terraform.tfvars` is like `.env` for Terraform — always gitignore it if it contains real values like tenant IDs.
-
----
-
-### Variable Declarations in Terraform
-> 📅 Azure Deploy Sprint
-
-Every variable used in `terraform.tfvars` must have a matching `variable` block in `main.tf`:
-
+**The fix — a remote backend:**
 ```hcl
-variable "resource_group_name" {
-  description = "Name of the Azure Resource Group"
-  default     = "pr-risk-analyzer-rg"
-}
-
-variable "tenant_id" {
-  description = "Azure tenant ID for Key Vault access"
-  # no default — must be supplied at deploy time
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "pr-risk-analyzer-rg"
+    storage_account_name = "pranalyzertfstate"
+    container_name       = "tfstate"
+    key                  = "terraform.tfstate"
+  }
 }
 ```
 
 **Why it works:**
-Without a `variable` block, Terraform ignores the `.tfvars` value and warns "undeclared variable." The declaration tells Terraform the variable is intentional.
+State now lives in an Azure Storage Account blob, not on any one machine. Both your local terminal and GitHub Actions read/write the *same* state file, so `terraform plan` always reflects true reality regardless of where it's run from.
+
+**Good to know:**
+- The storage account itself has to exist before `terraform init` can use it as a backend — this is a classic bootstrapping problem, solved here by creating it via `az storage account create` as a pipeline step *before* `terraform init` runs
+- State locking (via a lease on the blob) prevents two simultaneous `apply` runs from corrupting state — you'll see "Acquiring state lock" / "Releasing state lock" in the output
 
 ---
 
-### Terraform State
-> 📅 Azure Deploy Sprint
+### `terraform import` — Bringing Existing Resources Under Management
+> 📅 Infra Hardening Sprint ★
 
-Terraform stores what it has deployed in a `terraform.tfstate` file.
+When infrastructure already exists in Azure but isn't in Terraform's state (e.g. it was created in an earlier run against local state, and CI is now using fresh remote state), `terraform apply` will try to create it again and Azure will reject it with "already exists."
 
-**Why it matters:**
-When you run `terraform plan`, it compares your `.tf` files against the state file to figure out what needs to change. If there's no state file, Terraform thinks nothing has been deployed — even if real resources exist in Azure.
+**The fix:**
+```bash
+terraform import azurerm_resource_group.main \
+  /subscriptions/<sub-id>/resourceGroups/pr-risk-analyzer-rg
+```
+
+**Resource ID formats differ per resource type** — most are the plain ARM resource ID, but composite resources like Key Vault access policies use a suffixed format:
+```
+/subscriptions/.../vaults/pr-analyzer-vault/objectId/<principal-object-id>
+```
+
+**Three possible outcomes when importing, all meaningful:**
+
+| Result | Meaning |
+|---|---|
+| `Import successful!` | Resource existed in Azure but not in state — now it does |
+| `Resource already managed by Terraform` | Already in state from a prior import — safe to ignore |
+| `Cannot import non-existent remote object` | The resource doesn't actually exist in Azure (e.g. it was destroyed in a prior failed run) — safe to ignore, `apply` will create it fresh |
 
 **Good to know:**
-- Never commit `terraform.tfstate` — it contains subscription IDs and resource paths
-- In production, teams store state remotely in Azure Blob Storage so everyone on the team shares it
+Wrap import commands in `set +e` in CI so one resource's "already imported" isn't treated as a pipeline failure — but keep the *actual* error output visible (don't blanket-suppress with `2>/dev/null`), or you'll hide real failures like a genuine permissions error and waste time debugging the wrong thing.
+
+---
+
+### The Chicken-and-Egg Problem: Data Sources vs Access Policies ★
+> 📅 Infra Hardening Sprint — the trickiest bug of the whole project
+
+**The setup:** `main.tf` had a `data "azurerm_key_vault_secret"` block to read secrets, and a `resource "azurerm_key_vault_access_policy"` to grant the Service Principal permission to read them. Both were defined in the same Terraform config.
+
+**The problem:** *Any* Terraform command that loads the config — including `terraform import` for an unrelated resource — evaluates every `data` block up front. So even importing the Resource Group triggered a read of the Key Vault secrets, which failed with `403 Forbidden` because the access policy resource hadn't been *applied* yet. Terraform can't grant itself permission and use that permission in the same breath.
+
+**The fix:** Grant the access policy via Azure CLI directly, *before* Terraform ever runs:
+```bash
+az keyvault set-policy \
+  --name pr-analyzer-vault \
+  --spn "<service-principal-client-id>" \
+  --secret-permissions get list
+```
+
+Then let Terraform's `azurerm_key_vault_access_policy` resource `import` that same policy into state afterward, so Terraform "owns" it going forward without trying to recreate it.
+
+**Why this pattern matters beyond this project:**
+Any time Terraform needs to both grant an identity access *and* immediately use that access to read something (secrets, storage keys, etc.), you have a bootstrapping cycle. The general fix is always the same: grant access through an out-of-band step (CLI, portal, or a separate `apply -target`) first, then bring it under Terraform management.
 
 ---
 
@@ -654,6 +689,7 @@ When you run `terraform plan`, it compares your `.tf` files against the state fi
 | ECR | `azurerm_container_registry` |
 | IAM Role | `azurerm_role_assignment` |
 | VPC | `azurerm_virtual_network` |
+| CloudWatch Logs | `azurerm_log_analytics_workspace` |
 
 ---
 
@@ -699,13 +735,46 @@ secure_environment_variables = {
 **Why `secure_environment_variables` not `environment_variables`:**
 Secure vars are redacted in all logs, portal output, and `terraform plan` output. Regular vars show in plain text.
 
+**Gotcha (see Chicken-and-Egg entry above):** these `data` blocks are evaluated on *every* Terraform command that touches the config — not just `apply`. Permission to read them must exist before you run anything, including `import`.
+
+---
+
+### Azure Log Analytics Workspace
+> 📅 Infra Hardening Sprint
+
+Persistent, queryable storage for container logs — solves the "logs disappear when the container stops" problem.
+
+```hcl
+resource "azurerm_log_analytics_workspace" "main" {
+  name                = "pr-analyzer-logs"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+}
+```
+
+Wired into the container group via:
+```hcl
+diagnostics {
+  log_analytics {
+    workspace_id  = azurerm_log_analytics_workspace.main.workspace_id
+    workspace_key = azurerm_log_analytics_workspace.main.primary_shared_key
+  }
+}
+```
+
+**AWS equivalent:** CloudWatch Logs.
+
+**Status:** deployed and wired in; not yet manually verified end-to-end (Azure for Students log streaming had been unreliable via CLI/portal for this project) — but this is now the correct production pattern in place for any future debugging.
+
 ---
 
 ---
 
 # AZURE
 
-> 📅 Weekend Sprint + Azure Deploy Sprint + CI/CD Sprint
+> 📅 Weekend Sprint → Azure Deploy Sprint → CI/CD Sprint → Infra Hardening Sprint
 
 ---
 
@@ -724,6 +793,7 @@ Secure vars are redacted in all logs, portal output, and `terraform plan` output
 | CodePipeline | Azure Pipelines |
 | S3 | Blob Storage |
 | VPC | Virtual Network |
+| CloudWatch Logs | Log Analytics Workspace |
 
 ---
 
@@ -738,7 +808,9 @@ Tenant (your org's Microsoft account)
         └── Resource Group (logical container — pr-risk-analyzer-rg)
               ├── Key Vault (pr-analyzer-vault)
               ├── Container Registry (pranalyzeracr)
-              └── Container Instances (pr-risk-analyzer)
+              ├── Container Instances (pr-risk-analyzer)
+              ├── Log Analytics Workspace (pr-analyzer-logs)
+              └── Storage Account (pranalyzertfstate — Terraform remote state)
 ```
 
 **Why it matters:**
@@ -747,11 +819,11 @@ Thomas mentioned subscriptions constantly. Permissions, billing, and resource ma
 ---
 
 ### Azure Key Vault
-> 📅 Azure Deploy Sprint + CI/CD Sprint ✅ Done
+> 📅 Azure Deploy Sprint + CI/CD Sprint + Infra Hardening Sprint ✅ Done
 
 Azure's secrets management service — stores API keys, tokens, and passwords securely.
 
-**Current state:** `ANTHROPIC_API_KEY` and `GITHUB_TOKEN` stored in Key Vault and injected into Container Instances at deploy time via Terraform `secure_environment_variables`.
+**Current state:** `ANTHROPIC_API_KEY` and `GITHUB_TOKEN` stored in Key Vault and injected into Container Instances at deploy time via Terraform `secure_environment_variables`. Service Principal access policy granted via CLI, then imported into Terraform state (see Chicken-and-Egg entry in Terraform section).
 
 ---
 
@@ -761,6 +833,17 @@ Azure's secrets management service — stores API keys, tokens, and passwords se
 Private Docker image registry — stores your built images for Container Instances to pull.
 
 **Current state:** `pranalyzeracr.azurecr.io/pr-risk-analyzer:v1` is live and being deployed automatically by GitHub Actions on every push.
+
+**Good to know:** Azure for Students blocks `az acr build` (cloud-side builds, error `TasksOperationsNotAllowed`) — images must be built locally/in-CI and pushed with `docker push`, not built remotely by ACR.
+
+---
+
+### Azure Storage Account (Terraform Backend)
+> 📅 Infra Hardening Sprint
+
+A general-purpose Azure Storage Account, used here purely to hold the Terraform state blob — not application data.
+
+**Why a separate concept from Blob Storage as "S3 equivalent":** the same service (Storage Account → Blob Container) is reused here for a DevOps purpose (state backend) rather than an application purpose (file storage). Same building block, different job.
 
 ---
 
@@ -845,7 +928,7 @@ docker run --env-file .env pr-risk-analyzer:v1 --repo owner/repo
 
 # SECURITY & SECRETS
 
-> 📅 Week 1 + Refactor Sprint + CI/CD Sprint
+> 📅 Week 1 → Refactor Sprint → CI/CD Sprint → Infra Hardening Sprint
 
 ---
 
@@ -859,7 +942,7 @@ docker run --env-file .env pr-risk-analyzer:v1 --repo owner/repo
 | Risk if exposed | High | Medium | Low |
 | Used for | Local dev | CI/CD pipelines | Production GitHub auth |
 
-**Current state:** Service Principal (`pr-risk-analyzer-sp`) used for GitHub Actions → Azure auth.
+**Current state:** Service Principal (`pr-risk-analyzer-sp`) used for every Azure interaction in the pipeline — local machine and CI both authenticate this way. Personal `.edu` account never used for automation.
 
 ---
 
@@ -869,7 +952,7 @@ docker run --env-file .env pr-risk-analyzer:v1 --repo owner/repo
 | Where | Use case |
 |---|---|
 | `.env` file | Local development only — never commit |
-| GitHub Actions secrets | CI/CD pipelines — `AZURE_CREDENTIALS` lives here |
+| GitHub Actions secrets | CI/CD pipelines — `AZURE_CREDENTIALS`, `AZURE_TENANT_ID` live here |
 | Azure Key Vault | Production runtime — `ANTHROPIC_API_KEY`, `GITHUB_TOKEN` live here |
 
 **Why this progression matters:**
@@ -881,11 +964,25 @@ Each layer adds security. `.env` → GitHub secrets → Key Vault mirrors how re
 > 📅 CI/CD Sprint — learned the hard way
 
 If a secret is ever posted publicly (chat, GitHub, Slack), treat it as compromised immediately:
-1. Rotate it right away (`az ad sp credential reset`)
+1. Rotate it right away (`az ad sp credential reset` or generate a new client secret in the portal)
 2. Check Azure activity logs for unauthorized use
-3. Update any systems using the old secret
+3. Update any systems using the old secret (GitHub Actions secrets, local `.bashrc`, etc.)
 
 **Why:** Secrets in chat logs, screenshots, or commit history are permanently exposed — even after deletion.
+
+---
+
+### Protecting a Personal/.edu Account During Automation Work ★
+> 📅 Infra Hardening Sprint
+
+When a personal account (especially a university-managed one) has conditional access policies, repeated `az login` calls during development can trigger security flags.
+
+**The complete solution used in this project:**
+- All local Terraform runs authenticate via `ARM_*` environment variables sourced from the Service Principal — never `az login` with the personal account
+- All CI/CD runs authenticate via `azure/login@v1` using the same Service Principal, stored as a GitHub Actions secret
+- The *only* place personal-account login would ever be needed is generating or rotating the Service Principal itself — and even that can be done through the Azure Portal UI instead of CLI if needed
+
+**Why it matters:** this is the actual production pattern — engineers on real teams essentially never use their own identity for automated infrastructure work. Service Principals (or Managed Identities where possible) are the standard.
 
 ---
 
@@ -915,7 +1012,7 @@ reports/*.txt
 ---
 
 ### Infrastructure as Code (IaC) ★
-> 📅 Introduced Week 1, implemented and completed CI/CD Sprint
+> 📅 Introduced Week 1, implemented and completed through Infra Hardening Sprint
 
 The practice of managing and provisioning infrastructure through code rather than manual processes.
 
@@ -925,7 +1022,7 @@ The practice of managing and provisioning infrastructure through code rather tha
 - **Auditability** — clear history of what changed and why
 - **Scale** — less manual toil, more time on reliability
 
-**★ Interview answer:** "Terraform lets us build, tear down, and rebuild environments automatically. If something breaks, we run `terraform apply` and get back to a known good state in minutes."
+**★ Interview answer:** "Terraform lets us build, tear down, and rebuild environments automatically. If something breaks, we run `terraform apply` and get back to a known good state in minutes. We keep state remote in Blob Storage so the pipeline and local dev both see the same reality."
 
 ---
 
@@ -999,7 +1096,7 @@ Model names use **hyphens only** — no dots:
 |---|---|---|
 | `200` | OK | GitHub API success |
 | `401` | Unauthorized | Expired/missing GitHub PAT |
-| `403` | Forbidden | Token lacks scope |
+| `403` | Forbidden | Token lacks scope; SP missing Key Vault access policy |
 | `404` | Not found | Wrong repo, missing endpoint, wrong model name |
 | `409` | Conflict | Docker Hub rate limit in Azure |
 
@@ -1009,7 +1106,7 @@ Model names use **hyphens only** — no dots:
 
 # ERRORS & FIXES
 
-> 📅 Week 1 — CI/CD Sprint | Running log of every error encountered
+> 📅 Week 1 → Infra Hardening Sprint | Running log of every error encountered
 
 ---
 
@@ -1067,7 +1164,56 @@ Model names use **hyphens only** — no dots:
 ### `InternalServerError` on `az container logs`
 > 📅 Azure Deploy Sprint
 - **Cause:** Azure for Students subscription limitation on log streaming for terminated containers
-- **Fix:** Verify tool works locally with same env vars; use ExitCode 0 + restart count 0 as proxy evidence
+- **Fix:** Verify tool works locally with same env vars; use ExitCode 0 + restart count 0 as proxy evidence; Log Analytics workspace now deployed for future runs
+
+---
+
+### `Error: A resource with the ID "..." already exists - needs to be imported`
+> 📅 Infra Hardening Sprint
+- **Cause:** Resource exists in Azure but not in Terraform's (now-remote) state — common the first time a new backend or a new CI environment runs against pre-existing infra
+- **Fix:** `terraform import <resource_address> <azure_resource_id>` for each affected resource
+
+---
+
+### `Error: Resource already managed by Terraform`
+> 📅 Infra Hardening Sprint
+- **Cause:** Attempted to import a resource that's already in state from a prior successful import
+- **Fix:** None needed — this is expected and safe on repeat pipeline runs; don't let it block the pipeline (`set +e` + explicit per-resource logging)
+
+---
+
+### `Error: Cannot import non-existent remote object`
+> 📅 Infra Hardening Sprint
+- **Cause:** Tried to import a resource that was destroyed in an earlier failed run and no longer exists in Azure
+- **Fix:** None needed — `terraform apply` creates it fresh afterward
+
+---
+
+### `403 Forbidden: does not have secrets get permission on key vault` (during `terraform import`, not just `apply`)
+> 📅 Infra Hardening Sprint — the trickiest bug of the project ★
+- **Cause:** `data "azurerm_key_vault_secret"` blocks are evaluated on *every* Terraform command that loads the config, including `import` for unrelated resources — the Service Principal didn't have Key Vault access yet because the access-granting resource hadn't been applied
+- **Fix:** Grant access via `az keyvault set-policy --spn <client-id> --secret-permissions get list` directly through the CLI *before* any Terraform command runs, then import that policy into Terraform state afterward. See full write-up in the Terraform section.
+
+---
+
+### `argument --password/-p: expected one argument` (az login --service-principal)
+> 📅 Infra Hardening Sprint
+- **Cause:** Client secret value starts with a special character (e.g. `-`) or contains characters the shell interprets
+- **Fix:** Write the secret to a temp file and pass with `--password @/path/to/file`, then delete the file immediately after
+
+---
+
+### `AADSTS7000215: Invalid client secret provided`
+> 📅 Infra Hardening Sprint
+- **Cause:** Used the secret **ID** (visible in the portal's list view) instead of the secret **value** (only shown once, at creation time)
+- **Fix:** Generate a new client secret in Certificates & Secrets and copy the **Value** column immediately
+
+---
+
+### `docker: command not found` in WSL2
+> 📅 Azure Deploy Sprint
+- **Cause:** Docker not installed in WSL2 Ubuntu
+- **Fix:** `curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh`
 
 ---
 
@@ -1118,6 +1264,14 @@ Model names use **hyphens only** — no dots:
 
 ---
 
+## Infra Hardening Sprint ✅
+
+Final sprint — remote state, Log Analytics, and the Key Vault chicken-and-egg problem.
+
+**Key lesson demonstrated:** Terraform `data` blocks are evaluated on every command that loads the config, not just `apply` — so an identity needing to both read secrets AND be granted permission to read them in the same config creates a bootstrapping cycle that has to be broken with an out-of-band step.
+
+---
+
 ---
 
 # QUESTIONS TO FOLLOW UP ON
@@ -1133,12 +1287,13 @@ Model names use **hyphens only** — no dots:
 - [ ] What is the difference between Azure Pipelines and GitHub Actions YAML syntax?
 - [ ] What is Azure RBAC and how does least privilege work in Azure?
 - [ ] How does `DefaultAzureCredential` work and what auth methods does it try?
-- [ ] What is Terraform remote state and why do teams use Azure Blob Storage for it?
 - [ ] How does a GitHub App generate short-lived tokens compared to a PAT?
 - [ ] What is `terraform destroy` and when should you run it?
 - [ ] What is the difference between `restart_policy = "Never"` and `"Always"` in Azure Container Instances?
-- [ ] How would you add Application Insights to monitor the container in production?
+- [ ] How would you verify Log Analytics is actually receiving container logs (KQL query basics)?
+- [ ] What other Azure resources commonly hit the same "grant access, then use access" bootstrapping problem as Key Vault (hint: storage account RBAC, managed identities)?
+- [ ] What is a Managed Identity and how would it replace the Service Principal pattern used here if this ran natively inside Azure (e.g. from an Azure DevOps agent)?
 
 ---
 
-*Last updated: CI/CD Sprint ✅ | Project complete | Pipeline live 2026-08-11*
+*Last updated: Infra Hardening Sprint ✅ | Project fully complete and closed out | Final pipeline verified green 2026-08-11*

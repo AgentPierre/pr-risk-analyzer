@@ -60,7 +60,7 @@ jobs:
 
       - name: Deploy to Azure Container Instances
         run: |
-          az container restart \
+          az container start \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --name ${{ env.CONTAINER_GROUP }}
 

@@ -146,7 +146,14 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Login to ACR
-        run: az acr login --name ${{ env.ACR_NAME }}
+        run: |
+          for i in 1 2 3; do
+            az acr login --name ${{ env.ACR_NAME }} && exit 0
+            echo "ACR login attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "ACR login failed after 3 attempts"
+          exit 1
 
       - name: Build Docker image
         run: |
